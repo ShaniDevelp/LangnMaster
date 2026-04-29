@@ -2,25 +2,50 @@
 
 :root {
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f0f0f;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand-50: #f0f0ff;
+  --color-brand-100: #e0e0fe;
+  --color-brand-200: #c4c2fd;
+  --color-brand-300: #a29bfc;
+  --color-brand-400: #8470fa;
+  --color-brand-500: #6c4ff5;
+  --color-brand-600: #5c3de8;
+  --color-brand-700: #4d2ec9;
+  --color-brand-800: #3f28a4;
+  --color-brand-900: #312181;
+  --color-brand-950: #1e1350;
+  --font-sans: var(--font-inter);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+  min-height: 100dvh;
 }
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
