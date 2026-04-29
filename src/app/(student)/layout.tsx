@@ -1,20 +1,11 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { TopBar } from '@/components/TopBar'
-import { BottomNav } from '@/components/BottomNav'
+import { SidebarNav } from '@/components/SidebarNav'
 import type { Profile } from '@/lib/supabase/types'
-
-const studentNav = [
-  { href: '/student/dashboard', icon: '🏠', label: 'Home' },
-  { href: '/student/courses', icon: '📚', label: 'Courses' },
-  { href: '/student/sessions', icon: '📅', label: 'Sessions' },
-]
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
 
-  // getSession() reads cookie, no network call for valid tokens.
-  // On expired+unrefreshable session, Supabase SSR clears cookies → proxy won't bounce.
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) redirect('/login')
 
@@ -38,13 +29,19 @@ export default async function StudentLayout({ children }: { children: React.Reac
 
   if (!profile) redirect('/login')
 
+  const p = profile as Profile & { onboarding_completed?: boolean | null }
+  if (!p.onboarding_completed) redirect('/student/onboarding')
+
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      <TopBar profile={profile!} />
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6 pb-24">
-        {children}
-      </main>
-      <BottomNav items={studentNav} />
+    <div className="flex min-h-screen bg-gray-50">
+      <SidebarNav profile={profile!} />
+
+      {/* Content — offset by sidebar on desktop */}
+      <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-10 max-w-7xl w-full mx-auto lg:mx-0">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

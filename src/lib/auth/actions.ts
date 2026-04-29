@@ -41,7 +41,7 @@ export async function signUp(formData: FormData) {
   const cookieStore = await cookies()
   cookieStore.set(ROLE_COOKIE, role, COOKIE_OPTS)
 
-  redirect(role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard')
+  redirect(role === 'teacher' ? '/teacher/dashboard' : '/student/onboarding')
 }
 
 export async function signIn(formData: FormData) {

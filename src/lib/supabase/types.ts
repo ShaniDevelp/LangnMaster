@@ -12,6 +12,13 @@ export type Database = {
           avatar_url: string | null
           languages: string[] | null
           created_at: string
+          native_lang: string | null
+          target_langs: string[] | null
+          levels: Record<string, string> | null
+          timezone: string | null
+          availability: string[] | null
+          goals: string[] | null
+          onboarding_completed: boolean | null
         }
         Insert: {
           id: string
@@ -21,6 +28,13 @@ export type Database = {
           avatar_url?: string | null
           languages?: string[] | null
           created_at?: string
+          native_lang?: string | null
+          target_langs?: string[] | null
+          levels?: Record<string, string> | null
+          timezone?: string | null
+          availability?: string[] | null
+          goals?: string[] | null
+          onboarding_completed?: boolean | null
         }
         Update: {
           id?: string
@@ -30,6 +44,13 @@ export type Database = {
           avatar_url?: string | null
           languages?: string[] | null
           created_at?: string
+          native_lang?: string | null
+          target_langs?: string[] | null
+          levels?: Record<string, string> | null
+          timezone?: string | null
+          availability?: string[] | null
+          goals?: string[] | null
+          onboarding_completed?: boolean | null
         }
       }
       courses: {
@@ -82,6 +103,9 @@ export type Database = {
           course_id: string
           status: 'pending' | 'assigned' | 'active' | 'completed' | 'cancelled'
           enrolled_at: string
+          payment_status: 'unpaid' | 'paid' | 'refunded'
+          stripe_session_id: string | null
+          refunded_at: string | null
         }
         Insert: {
           id?: string
@@ -89,6 +113,9 @@ export type Database = {
           course_id: string
           status?: 'pending' | 'assigned' | 'active' | 'completed' | 'cancelled'
           enrolled_at?: string
+          payment_status?: 'unpaid' | 'paid' | 'refunded'
+          stripe_session_id?: string | null
+          refunded_at?: string | null
         }
         Update: {
           id?: string
@@ -96,6 +123,9 @@ export type Database = {
           course_id?: string
           status?: 'pending' | 'assigned' | 'active' | 'completed' | 'cancelled'
           enrolled_at?: string
+          payment_status?: 'unpaid' | 'paid' | 'refunded'
+          stripe_session_id?: string | null
+          refunded_at?: string | null
         }
       }
       groups: {
@@ -197,6 +227,42 @@ export type Database = {
       }
     }
   }
+}
+
+// ── Stage 3 types (not in Database generic — tables added via migration) ──────
+export type TeacherProfile = {
+  user_id: string
+  intro_video_url: string | null
+  years_experience: number
+  certifications: string[]
+  languages_taught: string[]
+  rating: number
+  review_count: number
+  created_at: string
+}
+
+export type CourseModule = {
+  id: string
+  course_id: string
+  week_number: number
+  title: string
+  topics: string[]
+}
+
+export type CourseTeacher = {
+  id: string
+  course_id: string
+  teacher_id: string
+}
+
+export type Review = {
+  id: string
+  course_id: string
+  teacher_id: string | null
+  student_id: string
+  rating: number
+  body: string | null
+  created_at: string
 }
 
 export type Profile = Database['public']['Tables']['profiles']['Row']

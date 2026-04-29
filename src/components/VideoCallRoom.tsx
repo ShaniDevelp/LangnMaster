@@ -17,6 +17,7 @@ interface Props {
   userName: string
   courseName: string
   isTeacher?: boolean
+  onLeave?: () => void
 }
 
 const ICE_SERVERS = [
@@ -24,7 +25,7 @@ const ICE_SERVERS = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
 
-export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseName, isTeacher }: Props) {
+export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseName, isTeacher, onLeave }: Props) {
   const supabase = createClient()
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
@@ -315,16 +316,29 @@ export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseNa
           {isVideoOff ? '📵' : '📹'}
         </button>
 
-        <Link
-          href={returnPath}
-          className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center text-xl text-white hover:bg-red-600 transition-colors"
-          onClick={() => {
-            localStreamRef.current?.getTracks().forEach(t => t.stop())
-            channelRef.current?.unsubscribe()
-          }}
-        >
-          📵
-        </Link>
+        {onLeave ? (
+          <button
+            onClick={() => {
+              localStreamRef.current?.getTracks().forEach(t => t.stop())
+              channelRef.current?.unsubscribe()
+              onLeave()
+            }}
+            className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center text-xl text-white hover:bg-red-600 transition-colors"
+          >
+            📵
+          </button>
+        ) : (
+          <Link
+            href={returnPath}
+            className="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center text-xl text-white hover:bg-red-600 transition-colors"
+            onClick={() => {
+              localStreamRef.current?.getTracks().forEach(t => t.stop())
+              channelRef.current?.unsubscribe()
+            }}
+          >
+            📵
+          </Link>
+        )}
       </div>
     </div>
   )
