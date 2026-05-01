@@ -10,6 +10,7 @@ const adminNav = [
   { href: '/admin/students', icon: '🎓', label: 'Students' },
   { href: '/admin/teachers', icon: '👨‍🏫', label: 'Teachers' },
   { href: '/admin/groups', icon: '👥', label: 'Groups' },
+  { href: '/admin/requests', icon: '⚙️', label: 'Requests' },
 ]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

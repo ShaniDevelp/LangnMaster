@@ -1,10 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Profile, Enrollment, Course } from '@/lib/supabase/types'
-import { AssignGroupsButton } from '@/components/admin/AssignGroupsButton'
+import { GroupBuilder } from './GroupBuilder'
 
 type EnrollmentRow = Enrollment & {
-  profiles: Pick<Profile, 'id' | 'name'> | null
-  courses: Pick<Course, 'name' | 'language' | 'level' | 'max_group_size'> | null
+  profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null
+  courses: Pick<Course, 'id' | 'name' | 'language' | 'level' | 'max_group_size' | 'sessions_per_week' | 'duration_weeks'> | null
+}
+
+type TeacherData = {
+  id: string
+  name: string
+  avatar_url: string | null
+  availability: string[]
+  languages_taught: { lang: string; proficiency: string }[]
 }
 
 const statusColor: Record<string, string> = {
@@ -18,84 +26,53 @@ const statusColor: Record<string, string> = {
 export default async function AdminEnrollmentsPage() {
   const supabase = await createClient()
 
+  // 1. Fetch Enrollments
   const { data: enrollmentsRaw } = await supabase
     .from('enrollments')
-    .select('*, profiles:user_id(id, name), courses(name, language, level, max_group_size)')
+    .select('*, profiles:user_id(id, name, avatar_url), courses(id, name, language, level, max_group_size, sessions_per_week, duration_weeks)')
     .order('enrolled_at', { ascending: false })
 
   const enrollments = (enrollmentsRaw ?? []) as unknown as EnrollmentRow[]
   const pending = enrollments.filter(e => e.status === 'pending')
 
-  // Group pending by course to preview batches
-  const pendingByCourse = pending.reduce<Record<string, EnrollmentRow[]>>((acc, e) => {
-    const key = e.course_id
-    acc[key] = acc[key] ?? []
-    acc[key].push(e)
+  // 2. Fetch Teachers for the Group Builder
+  const { data: teachersRaw } = await supabase
+    .from('profiles')
+    .select('id, name, avatar_url, availability')
+    .eq('role', 'teacher')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: tpRaw } = await (supabase as any)
+    .from('teacher_profiles')
+    .select('user_id, languages_taught')
+
+  const tpMap = ((tpRaw ?? []) as { user_id: string; languages_taught: { lang: string; proficiency: string }[] }[]).reduce((acc, tp) => {
+    acc[tp.user_id] = tp.languages_taught ?? []
     return acc
-  }, {})
+  }, {} as Record<string, { lang: string; proficiency: string }[]>)
+
+  const teachers: TeacherData[] = ((teachersRaw ?? []) as { id: string; name: string; avatar_url: string | null; availability: string[] | null }[]).map(t => ({
+    id: t.id,
+    name: t.name,
+    avatar_url: t.avatar_url,
+    availability: t.availability ?? [],
+    languages_taught: tpMap[t.id] ?? []
+  }))
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Enrollments</h1>
-          <p className="text-gray-500 text-sm mt-1">{enrollments.length} total · {pending.length} pending</p>
+          <h1 className="text-2xl font-bold text-gray-900">Enrollments & Group Builder</h1>
+          <p className="text-gray-500 text-sm mt-1">{enrollments.length} total · {pending.length} pending assignment</p>
         </div>
       </div>
 
-      {/* Batch assign panel */}
-      {pending.length > 0 ? (
-        <div className="bg-gradient-to-br from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl p-6">
-          <div className="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h2 className="font-bold text-purple-900 text-lg">Ready to assign groups</h2>
-              <p className="text-purple-700 text-sm mt-1">
-                {pending.length} student{pending.length !== 1 ? 's' : ''} waiting · will be grouped into {Math.ceil(pending.length / 2)} group{Math.ceil(pending.length / 2) !== 1 ? 's' : ''} of max 2
-              </p>
-            </div>
-            <AssignGroupsButton />
-          </div>
-
-          {/* Preview batches per course */}
-          <div className="mt-5 space-y-3">
-            {Object.entries(pendingByCourse).map(([courseId, rows]) => {
-              const course = rows[0].courses
-              const groupCount = Math.ceil(rows.length / (course?.max_group_size ?? 2))
-              return (
-                <div key={courseId} className="bg-white rounded-xl p-4 border border-purple-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">{course?.name}</p>
-                      <p className="text-xs text-gray-400">{course?.language} · {course?.level}</p>
-                    </div>
-                    <span className="text-xs font-medium bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">
-                      → {groupCount} group{groupCount !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {rows.map(e => (
-                      <div key={e.id} className="flex items-center gap-1.5 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                          {e.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                        </div>
-                        <span className="text-xs text-gray-700">{e.profiles?.name}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-5 text-center">
-          <p className="text-green-700 font-semibold">✓ All enrollments assigned</p>
-          <p className="text-green-600 text-sm mt-1">No pending enrollments right now.</p>
-        </div>
-      )}
+      {/* The new Interactive Group Builder */}
+      <GroupBuilder pending={pending} teachers={teachers} />
 
       {/* Full enrollment table */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden mt-8">
         <div className="px-6 py-4 border-b border-gray-100">
           <h2 className="font-bold text-gray-900">All Enrollments</h2>
         </div>

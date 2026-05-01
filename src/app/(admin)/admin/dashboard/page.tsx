@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import type { Profile, Enrollment, Group, Session } from '@/lib/supabase/types'
+import type { Profile, Enrollment, Group } from '@/lib/supabase/types'
 
 type StatCard = { label: string; value: number | string; icon: string; href: string; color: string }
 
@@ -13,70 +13,123 @@ export default async function AdminDashboard() {
     { count: pendingEnrollments },
     { count: activeGroups },
     { count: totalSessions },
-    { data: recentEnrollmentsRaw },
-    { data: recentGroupsRaw },
+    { data: enrollmentsWithPrice },
+    { data: pendingPayouts },
+    { data: pendingGroupActions },
   ] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'teacher'),
     supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('groups').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('sessions').select('*', { count: 'exact', head: true }),
-    supabase.from('enrollments')
-      .select('*, profiles:user_id(name), courses(name)')
-      .eq('status', 'pending')
-      .order('enrolled_at', { ascending: false })
-      .limit(5),
-    supabase.from('groups')
-      .select('*, courses(name), profiles:teacher_id(name)')
-      .order('created_at', { ascending: false })
-      .limit(5),
+    supabase.from('enrollments').select('courses(price_usd)'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('teacher_payouts').select('id, amount, teacher_id, profiles:teacher_id(name)').eq('status', 'pending'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('group_action_requests').select('id, type, group_id, teacher_id, groups(courses(name)), profiles:teacher_id(name)').eq('status', 'pending')
   ])
 
-  type EnrollmentRow = Enrollment & {
-    profiles: Pick<Profile, 'name'> | null
-    courses: { name: string } | null
-  }
-  type GroupRow = Group & {
-    courses: { name: string } | null
-    profiles: Pick<Profile, 'name'> | null
-  }
+  // Financial Stats
+  const rawEnrollments = (enrollmentsWithPrice ?? []) as unknown as { courses: { price_usd: number } | null }[]
+  const totalRevenue = rawEnrollments.reduce((acc, e) => acc + (e.courses?.price_usd ?? 0), 0)
 
-  const recentEnrollments = (recentEnrollmentsRaw ?? []) as unknown as EnrollmentRow[]
-  const recentGroups = (recentGroupsRaw ?? []) as unknown as GroupRow[]
+  const payouts = (pendingPayouts ?? []) as { id: string; amount: number; profiles?: { name?: string } }[]
+  const totalPendingPayoutsAmount = payouts.reduce((acc, p) => acc + p.amount, 0)
+
+  const groupActions = (pendingGroupActions ?? []) as { 
+    id: string; type: string; 
+    profiles?: { name?: string }; 
+    groups?: { courses?: { name?: string } } 
+  }[]
 
   const stats: StatCard[] = [
+    { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, icon: '💳', href: '#', color: 'from-emerald-500 to-teal-500' },
     { label: 'Students', value: totalStudents ?? 0, icon: '🎓', href: '/admin/students', color: 'from-blue-500 to-indigo-500' },
-    { label: 'Teachers', value: totalTeachers ?? 0, icon: '👨‍🏫', href: '/admin/teachers', color: 'from-emerald-500 to-teal-500' },
-    { label: 'Pending Enrollments', value: pendingEnrollments ?? 0, icon: '⏳', href: '/admin/enrollments', color: 'from-amber-400 to-orange-500' },
+    { label: 'Teachers', value: totalTeachers ?? 0, icon: '👨‍🏫', href: '/admin/teachers', color: 'from-cyan-500 to-blue-500' },
     { label: 'Active Groups', value: activeGroups ?? 0, icon: '👥', href: '/admin/groups', color: 'from-purple-500 to-[#6c4ff5]' },
     { label: 'Total Sessions', value: totalSessions ?? 0, icon: '📅', href: '/admin/groups', color: 'from-pink-500 to-rose-500' },
   ]
 
+  const hasAlerts = (pendingEnrollments ?? 0) > 0 || payouts.length > 0 || groupActions.length > 0
+
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Admin Overview</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Admin Command Center</h1>
           <p className="text-gray-500 text-sm mt-1">
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>
         </div>
-        {(pendingEnrollments ?? 0) > 0 && (
-          <Link
-            href="/admin/enrollments"
-            className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-amber-100 transition-colors"
-          >
-            <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-            {pendingEnrollments} pending
-          </Link>
-        )}
       </div>
 
-      {/* Stat cards */}
+      {/* ── Action Alerts ── */}
+      {hasAlerts && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-50 bg-amber-50/50 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+              <span className="text-sm">⚠️</span>
+            </div>
+            <h2 className="font-bold text-amber-900">Requires Attention</h2>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {/* Payouts */}
+            {payouts.length > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 text-lg">💸</div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{payouts.length} Pending Payout{payouts.length !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500">Teachers have requested a total of <span className="font-semibold text-gray-900">${totalPendingPayoutsAmount.toFixed(2)}</span>.</p>
+                  </div>
+                </div>
+                <Link href="/admin/payouts" className="text-sm font-semibold text-[#6c4ff5] bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition-colors whitespace-nowrap">
+                  Review payouts
+                </Link>
+              </div>
+            )}
+
+            {/* Group Actions */}
+            {groupActions.length > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple-600 text-lg">⚙️</div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{groupActions.length} Group Action Request{groupActions.length !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500">Teachers requested pauses or reassignments.</p>
+                  </div>
+                </div>
+                <Link href="/admin/requests" className="text-sm font-semibold text-[#6c4ff5] bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition-colors whitespace-nowrap">
+                  View requests
+                </Link>
+              </div>
+            )}
+
+            {/* Pending Enrollments */}
+            {(pendingEnrollments ?? 0) > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 text-lg">⏳</div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{pendingEnrollments} Pending Enrollment{pendingEnrollments !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500">Students are waiting to be assigned to groups.</p>
+                  </div>
+                </div>
+                <Link href="/admin/enrollments" className="text-sm font-semibold text-white bg-[#6c4ff5] px-4 py-2 rounded-xl hover:bg-[#5c3de8] transition-colors shadow-sm whitespace-nowrap">
+                  Assign Groups Now
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map(s => (
-          <Link key={s.label} href={s.href}>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group">
+          <Link key={s.label} href={s.href} className={s.href === '#' ? 'pointer-events-none' : ''}>
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow group h-full">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center text-xl mb-3`}>
                 {s.icon}
               </div>
@@ -87,68 +140,6 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pending enrollments */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Pending Enrollments</h2>
-            <Link href="/admin/enrollments" className="text-sm text-[#6c4ff5] font-medium">View all →</Link>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentEnrollments.length === 0 ? (
-              <p className="px-6 py-8 text-sm text-gray-400 text-center">No pending enrollments</p>
-            ) : recentEnrollments.map(e => (
-              <div key={e.id} className="px-6 py-3 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                    {e.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{e.profiles?.name}</p>
-                    <p className="text-xs text-gray-400">{e.courses?.name}</p>
-                  </div>
-                </div>
-                <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded-full">pending</span>
-              </div>
-            ))}
-          </div>
-          {recentEnrollments.length > 0 && (
-            <div className="px-6 py-4 border-t border-gray-100">
-              <Link
-                href="/admin/enrollments"
-                className="w-full flex items-center justify-center gap-2 bg-[#6c4ff5] text-white font-semibold text-sm py-2.5 rounded-xl hover:bg-[#5c3de8] transition-colors"
-              >
-                ⚡ Assign Groups Now
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Recent groups */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h2 className="font-bold text-gray-900">Recent Groups</h2>
-            <Link href="/admin/groups" className="text-sm text-[#6c4ff5] font-medium">View all →</Link>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentGroups.length === 0 ? (
-              <p className="px-6 py-8 text-sm text-gray-400 text-center">No groups yet</p>
-            ) : recentGroups.map(g => (
-              <div key={g.id} className="px-6 py-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{g.courses?.name}</p>
-                  <p className="text-xs text-gray-400">Teacher: {g.profiles?.name ?? 'Unassigned'}</p>
-                </div>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  g.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                }`}>
-                  {g.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
