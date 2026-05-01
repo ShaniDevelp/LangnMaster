@@ -1,18 +1,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect, notFound } from 'next/navigation'
-import { TeacherLobby } from '@/components/TeacherLobby'
+import { PostCallForm } from './PostCallForm'
 import type { Session, Group, Course, Profile, GroupMember } from '@/lib/supabase/types'
 
-type SessionWithGroup = Session & {
+type SessionRow = Session & {
+  session_notes?: string
+  homework_text?: string
+  homework_url?: string
   topic?: string
-  prep_notes?: string
   groups: (Group & {
     courses: Pick<Course, 'name' | 'language' | 'level'> | null
     group_members: (GroupMember & { profiles: Pick<Profile, 'id' | 'name'> | null })[]
   }) | null
 }
 
-export default async function TeacherSessionPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PostCallPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -26,31 +28,26 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
     .single()
 
   if (!sessionRaw) notFound()
-  const session = sessionRaw as unknown as SessionWithGroup
+  const session = sessionRaw as unknown as SessionRow
 
-  // Only the assigned teacher can access this lobby
   if (session.groups?.teacher_id !== user.id) redirect('/teacher/dashboard')
-
-  const { data: profileRaw } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const profile = profileRaw as Profile | null
 
   const students = (session.groups?.group_members ?? [])
     .map(m => ({ id: m.profiles?.id ?? '', name: m.profiles?.name ?? 'Student' }))
     .filter(s => s.id)
 
   return (
-    <TeacherLobby
+    <PostCallForm
       sessionId={session.id}
+      groupId={session.group_id}
       roomToken={token}
       courseName={session.groups?.courses?.name ?? 'Session'}
       language={session.groups?.courses?.language ?? ''}
-      level={session.groups?.courses?.level ?? ''}
       scheduledAt={session.scheduled_at}
-      userId={user.id}
-      userName={profile?.name ?? 'Teacher'}
       students={students}
-      existingTopic={(session as unknown as Record<string, string>).topic ?? ''}
-      existingPrepNotes={(session as unknown as Record<string, string>).prep_notes ?? ''}
+      existingNotes={(session as unknown as Record<string, string>).session_notes ?? ''}
+      existingHomeworkText={(session as unknown as Record<string, string>).homework_text ?? ''}
+      existingHomeworkUrl={(session as unknown as Record<string, string>).homework_url ?? ''}
     />
   )
 }

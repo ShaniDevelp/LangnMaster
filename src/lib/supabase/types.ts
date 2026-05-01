@@ -284,3 +284,21 @@ export type GroupWithDetails = Group & {
   courses: Pick<Course, 'name' | 'language' | 'level' | 'sessions_per_week' | 'duration_weeks'> | null
   group_members: Array<GroupMember & { profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null }>
 }
+
+// ── Phase 1: Teacher vetting ──────────────────────────────────────────────────
+
+export type TeacherApplication = {
+  id: string
+  user_id: string
+  languages_taught: { lang: string; proficiency: string }[]
+  certifications: string[]
+  intro_video_url: string | null
+  teaching_bio: string | null
+  availability: string[]
+  timezone: string | null
+  rate_expectation: number | null
+  status: 'pending' | 'approved' | 'rejected'
+  admin_notes: string | null
+  submitted_at: string
+  reviewed_at: string | null
+}

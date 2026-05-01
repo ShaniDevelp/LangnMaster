@@ -74,8 +74,39 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL(roleDashboard(role), request.url))
   }
 
-  if (pathname.startsWith('/teacher') && role !== 'teacher') {
-    return NextResponse.redirect(new URL(roleDashboard(role), request.url))
+  // ── Teacher route guard ────────────────────────────────────────────────────
+  if (pathname.startsWith('/teacher')) {
+    if (role !== 'teacher') {
+      return NextResponse.redirect(new URL(roleDashboard(role), request.url))
+    }
+
+    // Free-pass routes — accessible regardless of approval / onboarding state
+    const freeRoutes = ['/teacher/application', '/teacher/pending']
+    if (freeRoutes.some(r => pathname.startsWith(r))) {
+      return supabaseResponse
+    }
+
+    const isApproved = request.cookies.get('x-teacher-approved')?.value === 'true'
+    const isOnboarded = request.cookies.get('x-teacher-onboarded')?.value === 'true'
+
+    // If neither cookie is set, fetch state from DB once (same pattern as set-role)
+    if (!isApproved && !isOnboarded && !pathname.startsWith('/api/auth/set-teacher-state')) {
+      const stateUrl = new URL('/api/auth/set-teacher-state', request.url)
+      stateUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(stateUrl)
+    }
+
+    // Not approved yet → hold at pending
+    if (!isApproved) {
+      return NextResponse.redirect(new URL('/teacher/pending', request.url))
+    }
+
+    // Approved but hasn't completed onboarding wizard
+    if (!isOnboarded && !pathname.startsWith('/teacher/onboarding')) {
+      return NextResponse.redirect(new URL('/teacher/onboarding', request.url))
+    }
+
+    return supabaseResponse
   }
 
   if (pathname.startsWith('/admin') && role !== 'admin') {
