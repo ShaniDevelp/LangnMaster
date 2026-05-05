@@ -25,7 +25,20 @@ export type SessionRoomProps = {
 
 type Phase = 'lobby' | 'call' | 'complete'
 
-// ── Lobby ────────────────────────────────────────────────────────────────────
+// ── Shared Avatar ────────────────────────────────────────────────────────────
+
+function Avatar({ name, role }: { name: string; role?: string }) {
+  const isTeacher = role?.toLowerCase() === 'teacher'
+  return (
+    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-sm uppercase shadow-lg shadow-indigo-500/10 ${
+      isTeacher ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-slate-800'
+    }`}>
+      {name.charAt(0)}
+    </div>
+  )
+}
+
+// ── Lobby Preview ────────────────────────────────────────────────────────────
 
 function PreviewVideo() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -45,7 +58,6 @@ function PreviewVideo() {
         if (videoRef.current) videoRef.current.srcObject = s
         setCamOk(true)
 
-        // Mic level
         const ctx = new AudioContext()
         const src = ctx.createMediaStreamSource(s)
         const analyser = ctx.createAnalyser()
@@ -73,60 +85,50 @@ function PreviewVideo() {
   }, [])
 
   return (
-    <div className="space-y-3">
-      <div className="relative aspect-video bg-gray-900 rounded-2xl overflow-hidden">
+    <div className="space-y-6">
+      <div className="relative aspect-video bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/5">
         {camOk === false && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-            <span className="text-4xl mb-2">📵</span>
-            <p className="text-sm">Camera not available</p>
-            <p className="text-xs mt-1 text-gray-500">
-              <Link href="/student/device-check" className="underline">Check settings →</Link>
-            </p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
+            <span className="text-4xl mb-4">📵</span>
+            <p className="text-sm font-black uppercase tracking-widest">Camera Denied</p>
           </div>
         )}
         <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
         {camOk && (
-          <div className="absolute top-2 left-2 bg-black/40 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
-            Preview
+          <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            Live Preview
           </div>
         )}
       </div>
 
-      {/* Mic bar */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4 px-6 py-4 bg-slate-50 rounded-3xl border border-slate-100">
         <span className="text-sm">🎙️</span>
-        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
           <div
-            className="h-2 rounded-full transition-all duration-75"
+            className="h-2 rounded-full transition-all duration-100 ease-out"
             style={{
               width: `${micLevel * 100}%`,
-              background: micLevel > 0.8 ? '#ef4444' : micLevel > 0.5 ? '#f59e0b' : '#22c55e',
+              background: micLevel > 0.8 ? '#ef4444' : '#6366f1',
             }}
           />
         </div>
-        <span className="text-xs text-gray-400 w-20 text-right">
-          {camOk === null ? 'Requesting…' : camOk ? 'Mic active' : 'No mic'}
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+          {camOk === null ? 'Syncing...' : camOk ? 'Mic Active' : 'No Input'}
         </span>
       </div>
     </div>
   )
 }
 
-// ── Post-call rating ─────────────────────────────────────────────────────────
+// ── Post-call Rating ──
 
 function PostCallScreen({
-  courseId,
-  teacherId,
-  courseName,
-  nextSessionAt,
-  nextSessionToken,
+  courseId, teacherId, courseName,
+  nextSessionAt, nextSessionToken,
 }: {
-  courseId: string
-  teacherId: string | null
-  courseName: string
-  nextSessionAt: string | null
-  nextSessionToken: string | null
+  courseId: string; teacherId: string | null; courseName: string;
+  nextSessionAt: string | null; nextSessionToken: string | null;
 }) {
   const [rating, setRating] = useState(0)
   const [hover, setHover] = useState(0)
@@ -150,115 +152,96 @@ function PostCallScreen({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-4">
-
-        {/* Completion banner */}
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">
-          <div className="text-5xl mb-4">{submitted ? '✅' : '🎉'}</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {submitted ? 'Thanks for the feedback!' : 'Session complete!'}
+    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6 font-sans">
+      <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in duration-700">
+        <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/10 p-12 text-center">
+          <div className="w-24 h-24 bg-brand-50 rounded-[2.5rem] flex items-center justify-center text-4xl mx-auto mb-8 shadow-xl shadow-brand-500/10">
+            {submitted ? '✨' : '🎉'}
+          </div>
+          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-4">
+            {submitted ? 'Feedback Received' : 'Class Complete!'}
           </h1>
-          <p className="text-gray-500 text-sm">
+          <p className="text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
             {submitted
-              ? 'Your rating helps us improve and match you with better teachers.'
-              : `Great work in ${courseName}. How did it go?`}
+              ? 'Thank you for helping us maintain the highest standards of learning.'
+              : `You just finished your session in ${courseName}. How was your experience with the teacher?`}
           </p>
-        </div>
 
-        {/* Rating form */}
-        {!submitted && (
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-5">
-            <div>
-              <p className="font-semibold text-gray-900 mb-3 text-sm">Rate this session</p>
-              <div className="flex gap-2 justify-center">
+          {!submitted && (
+            <div className="mt-12 space-y-10">
+              <div className="flex gap-3 justify-center">
                 {[1, 2, 3, 4, 5].map(n => (
                   <button
                     key={n}
-                    onClick={() => setRating(n)}
                     onMouseEnter={() => setHover(n)}
                     onMouseLeave={() => setHover(0)}
-                    className="text-3xl transition-transform hover:scale-110 focus:outline-none"
-                    aria-label={`${n} star${n !== 1 ? 's' : ''}`}
+                    onClick={() => setRating(n)}
+                    className="group relative transition-all active:scale-90"
                   >
-                    {n <= (hover || rating) ? '⭐' : '☆'}
+                    <span className={`text-4xl transition-all duration-300 ${
+                      n <= (hover || rating) ? 'opacity-100 scale-110' : 'opacity-20 grayscale'
+                    }`}>⭐</span>
+                    {n === (hover || rating) && (
+                      <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg">
+                        {['', 'Poor', 'Fair', 'Good', 'Great', 'Masterful'][n]}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
-              {rating > 0 && (
-                <p className="text-center text-xs text-gray-400 mt-2">
-                  {['', 'Poor', 'Fair', 'Good', 'Very good', 'Excellent'][rating]}
-                </p>
-              )}
-            </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-900 mb-2">
-                Anything to share? <span className="font-normal text-gray-400">(optional)</span>
-              </label>
               <textarea
                 value={body}
                 onChange={e => setBody(e.target.value)}
-                placeholder="What went well? What could be better?"
+                placeholder="Share your thoughts on today's lesson..."
                 rows={3}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 placeholder-gray-300 focus:outline-none focus:border-brand-400 focus:ring-1 focus:ring-brand-400 resize-none"
+                className="w-full bg-slate-50 border-none rounded-[2rem] px-8 py-6 text-slate-900 font-bold placeholder-slate-300 focus:ring-2 focus:ring-brand-500 transition-all resize-none"
               />
+
+              <div className="pt-4 flex flex-col gap-4">
+                <button
+                  onClick={submit}
+                  disabled={rating === 0 || isPending}
+                  className="w-full bg-brand-500 text-white font-black py-5 rounded-[2rem] shadow-2xl shadow-brand-500/30 hover:bg-brand-600 transition-all disabled:opacity-30 active:scale-95"
+                >
+                  {isPending ? 'Syncing Feedback...' : 'Submit Review'}
+                </button>
+                <button onClick={() => setSubmitted(true)} className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                  Skip for now
+                </button>
+              </div>
             </div>
+          )}
 
-            <button
-              onClick={submit}
-              disabled={rating === 0 || isPending}
-              className="w-full bg-brand-500 text-white font-bold py-3.5 rounded-2xl hover:bg-brand-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {isPending ? 'Submitting…' : 'Submit feedback'}
-            </button>
-
-            <button
-              onClick={() => setSubmitted(true)}
-              className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
-            >
-              Skip for now
-            </button>
-          </div>
-        )}
-
-        {/* Next session preview */}
-        {nextSessionAt && nextSessionToken && (
-          <div className="bg-brand-50 border border-brand-100 rounded-2xl p-5 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-1">Next session</p>
-              <p className="font-bold text-gray-900 text-sm">{formatNext(nextSessionAt)}</p>
+          {submitted && (
+            <div className="mt-12 space-y-4">
+              <Link href="/student/dashboard" className="block w-full bg-slate-900 text-white font-black py-5 rounded-[2rem] hover:bg-slate-800 transition-all active:scale-95">
+                Back to Home
+              </Link>
+              <Link href="/student/sessions" className="block text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 py-2">
+                View Learning History →
+              </Link>
             </div>
-            <Link
-              href={`/student/session/${nextSessionToken}`}
-              className="text-xs font-bold bg-brand-500 text-white px-4 py-2 rounded-xl hover:bg-brand-600 transition-colors flex-shrink-0"
-            >
-              Preview →
-            </Link>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <Link
-            href="/student/dashboard"
-            className="flex-1 text-center bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-2xl hover:bg-gray-50 transition-colors text-sm"
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/student/sessions"
-            className="flex-1 text-center bg-brand-500 text-white font-semibold py-3 rounded-2xl hover:bg-brand-600 transition-colors text-sm"
-          >
-            All sessions →
-          </Link>
+          )}
         </div>
+
+        {submitted && nextSessionAt && (
+           <div className="bg-indigo-600 rounded-[3rem] p-8 text-white shadow-2xl shadow-indigo-600/20 flex items-center justify-between animate-in slide-in-from-bottom-8 duration-700">
+              <div>
+                <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-2">Next Milestone</p>
+                <p className="text-xl font-black">{formatNext(nextSessionAt)}</p>
+              </div>
+              <Link href={`/student/session/${nextSessionToken}`} className="bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white font-black px-6 py-3 rounded-2xl border border-white/10 text-xs uppercase tracking-widest transition-all">
+                Preview
+              </Link>
+           </div>
+        )}
       </div>
     </div>
   )
 }
 
-// ── SessionRoom (lobby → call → complete) ────────────────────────────────────
+// ── Main SessionRoom ──
 
 export default function SessionRoom({
   roomToken, sessionId, userId, userName,
@@ -270,7 +253,7 @@ export default function SessionRoom({
   const [phase, setPhase] = useState<Phase>('lobby')
 
   const scheduledTime = new Date(scheduledAt).toLocaleString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true,
   })
 
@@ -299,82 +282,102 @@ export default function SessionRoom({
     )
   }
 
-  // Lobby
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
-      {/* Back */}
-      <Link href="/student/sessions" className="text-sm text-gray-400 hover:text-gray-600">
-        ← My sessions
-      </Link>
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5">
-        {/* Left: camera/mic check */}
-        <div className="space-y-4">
+    <div className="min-h-screen bg-[#f8fafc] py-12 px-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center gap-4 mb-10">
+          <Link href="/student/sessions" className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
+            ←
+          </Link>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{courseName}</h1>
-            <p className="text-sm text-gray-400 mt-0.5">{scheduledTime} · {durationMinutes} min</p>
+             <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pre-class Lobby</h2>
+             <p className="text-slate-400 text-sm font-medium">Verify your setup and meet your teacher.</p>
           </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-3">Camera & microphone check</p>
-            <PreviewVideo />
-          </div>
-
-          {/* Prep notes from teacher */}
-          {prepNotes && (
-            <div className="bg-purple-50 border border-purple-100 rounded-2xl p-5">
-              <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide mb-2">Teacher notes</p>
-              <p className="text-sm text-purple-800 leading-relaxed">{prepNotes}</p>
-            </div>
-          )}
         </div>
 
-        {/* Right: session info + join */}
-        <div className="space-y-4">
-          {/* Participants */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-4">In this session</p>
-            <div className="space-y-3">
-              {[
-                { name: userName, role: 'You', grad: 'from-brand-400 to-indigo-500' },
-                { name: teacherName ?? 'Teacher', role: 'Teacher', grad: 'from-pink-400 to-rose-500' },
-                { name: partnerName ?? 'Partner', role: 'Partner', grad: 'from-emerald-400 to-teal-500' },
-              ].map(p => (
-                <div key={p.role} className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${p.grad} flex items-center justify-center text-white font-bold text-sm flex-shrink-0`}>
-                    {p.name.charAt(0).toUpperCase()}
+        <div className="grid lg:grid-cols-[1fr_400px] gap-12">
+          
+          <div className="space-y-10">
+             {/* Header Info */}
+             <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-2xl shadow-indigo-600/20 relative overflow-hidden">
+                <div className="relative z-10">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest">Week {weekNumber}</span>
+                    <span className="text-white/40">•</span>
+                    <span className="text-indigo-100 font-bold text-sm">{scheduledTime}</span>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{p.name}</p>
-                    <p className="text-xs text-gray-400">{p.role}</p>
+                  <h1 className="text-4xl font-black tracking-tight mb-2">{courseName}</h1>
+                  <p className="text-indigo-200 font-medium italic">“{weekTopic ?? 'Open Conversation & Fluency Practice'}”</p>
+                </div>
+                <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
+             </div>
+
+             {/* Device Check */}
+             <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-10">
+                <div className="flex items-center justify-between mb-8">
+                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Tech Check</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hardware Ready</span>
                   </div>
                 </div>
-              ))}
-            </div>
+                <PreviewVideo />
+             </div>
+
+             {/* Teacher Notes */}
+             {prepNotes && (
+               <div className="bg-white rounded-[3rem] border border-slate-100 p-10 shadow-xl shadow-slate-200/50">
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">📝</div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Prep for Today</h3>
+                  </div>
+                  <div className="bg-slate-50 rounded-3xl p-8">
+                    <p className="text-slate-600 font-bold leading-relaxed">{prepNotes}</p>
+                  </div>
+               </div>
+             )}
           </div>
 
-          {/* Session topic */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">
-              Week {weekNumber}
-            </p>
-            <p className="font-bold text-gray-900">
-              {weekTopic ?? 'Live conversation practice'}
-            </p>
-            <p className="text-xs text-gray-400 mt-1">Today&apos;s focus topic</p>
+          <div className="space-y-10">
+             {/* Participants */}
+             <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-2xl shadow-indigo-500/10 text-center">
+                <h3 className="font-black text-slate-900 text-xs uppercase tracking-widest mb-10">Who&apos;s in the Room</h3>
+                <div className="flex flex-col gap-6">
+                  {[
+                    { name: userName, role: 'Student (You)', profile: 'me' },
+                    { name: teacherName ?? 'Teacher', role: 'Teacher', profile: 'teacher' },
+                    { name: partnerName, role: 'Learning Partner', profile: 'partner' }
+                  ].filter(p => p.name).map(p => (
+                    <div key={p.role} className="flex items-center gap-4 text-left group">
+                      <Avatar name={p.name!} role={p.profile === 'teacher' ? 'teacher' : ''} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-slate-900 truncate group-hover:text-brand-500 transition-colors">{p.name}</p>
+                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{p.role}</p>
+                      </div>
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
+                    </div>
+                  ))}
+                </div>
+             </div>
+
+             {/* Final CTA */}
+             <div className="bg-white rounded-[3.5rem] p-10 border border-slate-100 shadow-2xl shadow-indigo-500/10 flex flex-col items-center text-center">
+                <div className="w-20 h-20 bg-brand-50 rounded-[2.5rem] flex items-center justify-center text-3xl mb-8 animate-bounce shadow-xl shadow-brand-500/10">
+                  🎙️
+                </div>
+                <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Ready to Speak?</h3>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-10 px-4">
+                  Everything is set. Your teacher and classmates are waiting for you in the classroom.
+                </p>
+                <button
+                  onClick={() => setPhase('call')}
+                  className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white font-black text-sm uppercase tracking-widest rounded-[2.5rem] shadow-[0_20px_50px_rgba(99,102,241,0.4)] transition-all active:scale-95"
+                >
+                  Enter Classroom
+                </button>
+             </div>
           </div>
 
-          {/* Join button */}
-          <button
-            onClick={() => setPhase('call')}
-            className="w-full bg-brand-500 text-white font-bold py-4 rounded-2xl hover:bg-brand-600 transition-colors shadow-lg shadow-purple-200 text-base flex items-center justify-center gap-2"
-          >
-            🎥 I&apos;m ready — Join session
-          </button>
-
-          <p className="text-center text-xs text-gray-400">
-            Make sure your camera and mic are working before joining.
-          </p>
         </div>
       </div>
     </div>

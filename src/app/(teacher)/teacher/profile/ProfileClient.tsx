@@ -1,8 +1,8 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { saveTeacherProfile } from '@/lib/teacher/profile-actions'
-import { saveNotificationPrefs } from '@/lib/teacher/phase4-actions'
-import { AvailabilityGrid } from '@/components/AvailabilityGrid'
+import { saveNotificationPrefs, saveAvailability } from '@/lib/teacher/phase4-actions'
+import { AvailabilityPicker } from '@/components/AvailabilityPicker'
 
 type ProfileData = {
   name: string
@@ -20,15 +20,24 @@ type ProfileData = {
 }
 
 const TIMEZONES = [
-  { label: 'UTC-8  Pacific (LA)',        value: 'America/Los_Angeles' },
-  { label: 'UTC-5  Eastern (NY)',        value: 'America/New_York' },
-  { label: 'UTC+0  London (GMT)',        value: 'Europe/London' },
-  { label: 'UTC+1  Paris / Berlin',      value: 'Europe/Paris' },
-  { label: 'UTC+3  Moscow',             value: 'Europe/Moscow' },
-  { label: 'UTC+5:30  Mumbai',          value: 'Asia/Kolkata' },
-  { label: 'UTC+8  Singapore',          value: 'Asia/Singapore' },
-  { label: 'UTC+9  Tokyo',             value: 'Asia/Tokyo' },
-  { label: 'UTC+10  Sydney',           value: 'Australia/Sydney' },
+  { label: 'UTC-8  Pacific (US & Canada)',       value: 'America/Los_Angeles' },
+  { label: 'UTC-7  Mountain (US & Canada)',      value: 'America/Denver' },
+  { label: 'UTC-6  Central (US & Canada)',       value: 'America/Chicago' },
+  { label: 'UTC-5  Eastern (US & Canada)',       value: 'America/New_York' },
+  { label: 'UTC-3  Buenos Aires / São Paulo',    value: 'America/Argentina/Buenos_Aires' },
+  { label: 'UTC+0  London / Lisbon (GMT)',       value: 'Europe/London' },
+  { label: 'UTC+1  Paris / Berlin / Madrid',     value: 'Europe/Paris' },
+  { label: 'UTC+2  Cairo / Athens / Helsinki',   value: 'Europe/Helsinki' },
+  { label: 'UTC+3  Moscow / Nairobi / Riyadh',   value: 'Europe/Moscow' },
+  { label: 'UTC+4  Dubai / Baku',                value: 'Asia/Dubai' },
+  { label: 'UTC+5  Karachi / Tashkent',          value: 'Asia/Karachi' },
+  { label: 'UTC+5:30  Mumbai / Delhi',           value: 'Asia/Kolkata' },
+  { label: 'UTC+6  Dhaka / Almaty',              value: 'Asia/Dhaka' },
+  { label: 'UTC+7  Bangkok / Jakarta / Hanoi',   value: 'Asia/Bangkok' },
+  { label: 'UTC+8  Beijing / Singapore / Perth', value: 'Asia/Singapore' },
+  { label: 'UTC+9  Tokyo / Seoul',               value: 'Asia/Tokyo' },
+  { label: 'UTC+10  Sydney / Melbourne',         value: 'Australia/Sydney' },
+  { label: 'UTC+12  Auckland / Fiji',            value: 'Pacific/Auckland' },
 ]
 
 const CERT_OPTIONS = ['TEFL', 'CELTA', 'DELTA', 'TESOL', 'DELF/DALF', 'DELE', 'HSK Instructor', 'Cambridge TKT', 'MA Education']
@@ -43,6 +52,9 @@ const NOTIF_OPTIONS: { key: string; label: string; desc: string }[] = [
   { key: 'payout_processed',  label: 'Payout processed',         desc: 'When a payout is sent to your account' },
   { key: 'availability_conflict', label: 'Availability conflict', desc: 'If admin schedules outside your availability' },
 ]
+
+
+
 
 type Tab = 'public' | 'availability' | 'notifications' | 'account'
 
@@ -86,6 +98,9 @@ export function ProfileClient({ profile, userId }: Props) {
   const [rate, setRate]                   = useState(profile.rate_per_session)
   const [customCert, setCustomCert]       = useState('')
 
+  // Availability state
+  const [availability, setAvailability]   = useState<string[]>(profile.availability)
+
   // Notif prefs state
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(
     Object.fromEntries(NOTIF_OPTIONS.map(o => [o.key, profile.notification_prefs[o.key] ?? true]))
@@ -93,8 +108,10 @@ export function ProfileClient({ profile, userId }: Props) {
 
   const [savingProfile, startSaveProfile]   = useTransition()
   const [savingNotif, startSaveNotif]       = useTransition()
+  const [savingAvail, startSaveAvail]       = useTransition()
   const [profileMsg, setProfileMsg]         = useState<string | null>(null)
   const [notifMsg, setNotifMsg]             = useState<string | null>(null)
+  const [availMsg, setAvailMsg]             = useState<string | null>(null)
 
   function toggleCert(c: string) { setCerts(p => p.includes(c) ? p.filter(x => x !== c) : [...p, c]) }
   function addCustomCert() {
@@ -105,6 +122,10 @@ export function ProfileClient({ profile, userId }: Props) {
   }
   function setProficiency(lang: string, proficiency: string) {
     setLanguages(p => p.map(l => l.lang === lang ? { ...l, proficiency } : l))
+  }
+  function toggleSlot(day: string, slot: string) {
+    const key = `${day.toLowerCase()}-${slot.toLowerCase()}`
+    setAvailability(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
   }
 
   function handleSaveProfile() {
@@ -120,6 +141,14 @@ export function ProfileClient({ profile, userId }: Props) {
       const res = await saveNotificationPrefs(notifPrefs)
       setNotifMsg(res.error ? `Error: ${res.error}` : 'Preferences saved ✓')
       setTimeout(() => setNotifMsg(null), 3000)
+    })
+  }
+
+  function handleSaveAvailability() {
+    startSaveAvail(async () => {
+      const res = await saveAvailability(availability)
+      setAvailMsg(res.error ? `Error: ${res.error}` : 'Availability saved ✓')
+      setTimeout(() => setAvailMsg(null), 3000)
     })
   }
 
@@ -294,8 +323,26 @@ export function ProfileClient({ profile, userId }: Props) {
       {/* ══ Tab: Availability ══ */}
       {activeTab === 'availability' && (
         <div className="space-y-5">
-          <SectionCard icon="📅" title="Weekly availability" desc="Click or drag to mark the hours you're available for sessions. Admin uses this to schedule sessions.">
-            <AvailabilityGrid initialSlots={profile.availability} />
+          <SectionCard icon="📅" title="Weekly availability" desc="Select your available hours. Admin uses this to schedule sessions. Times shown in your timezone · stored in UTC.">
+            {timezone ? (
+              <AvailabilityPicker
+                utcSlots={availability}
+                timezone={timezone}
+                onChange={setAvailability}
+              />
+            ) : (
+              <div className="bg-gray-50 rounded-2xl p-5 text-center text-sm text-gray-400">
+                Set your timezone in Public Info first.
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 mt-5 pt-4 border-t border-gray-50">
+              {availMsg && <span className={`text-sm font-medium ${availMsg.startsWith('Error') ? 'text-red-500' : 'text-emerald-600'}`}>{availMsg}</span>}
+              <button onClick={handleSaveAvailability} disabled={savingAvail}
+                className="px-6 py-2.5 rounded-xl bg-[#6c4ff5] text-white font-bold text-sm hover:bg-[#5c3de8] transition-colors disabled:opacity-40">
+                {savingAvail ? 'Saving…' : 'Save availability'}
+              </button>
+            </div>
           </SectionCard>
 
           <div className="bg-purple-50 rounded-2xl p-5">
@@ -303,7 +350,6 @@ export function ProfileClient({ profile, userId }: Props) {
             <ul className="space-y-1.5 text-sm text-purple-700">
               <li>✅ These slots represent your <strong>recurring weekly</strong> availability</li>
               <li>✅ Admin will schedule sessions within your available slots</li>
-              <li>✅ For one-off date blocks, use the schedule view to mark a day as unavailable</li>
               <li>✅ Changes take effect immediately and notify the admin team</li>
             </ul>
           </div>

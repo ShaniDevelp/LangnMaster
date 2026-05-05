@@ -1,19 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
-import type { Course, Enrollment, CourseModule, Review, Profile, TeacherProfile } from '@/lib/supabase/types'
+import type { Course, Enrollment, CourseModule, Review, Profile } from '@/lib/supabase/types'
 
 // ── Static config ─────────────────────────────────────────────────────────────
 
 const LANG_CONFIG: Record<string, { emoji: string; gradient: string }> = {
-  English:  { emoji: '🇬🇧', gradient: 'from-blue-500 to-indigo-600' },
-  Spanish:  { emoji: '🇪🇸', gradient: 'from-red-500 to-orange-500' },
-  French:   { emoji: '🇫🇷', gradient: 'from-blue-600 to-blue-800' },
-  German:   { emoji: '🇩🇪', gradient: 'from-yellow-500 to-amber-600' },
+  English: { emoji: '🇬🇧', gradient: 'from-blue-500 to-indigo-600' },
+  Spanish: { emoji: '🇪🇸', gradient: 'from-red-500 to-orange-500' },
+  French: { emoji: '🇫🇷', gradient: 'from-blue-600 to-blue-800' },
+  German: { emoji: '🇩🇪', gradient: 'from-yellow-500 to-amber-600' },
   Mandarin: { emoji: '🇨🇳', gradient: 'from-red-600 to-red-800' },
   Japanese: { emoji: '🇯🇵', gradient: 'from-pink-400 to-rose-600' },
-  Korean:   { emoji: '🇰🇷', gradient: 'from-blue-400 to-indigo-500' },
-  Arabic:   { emoji: '🇸🇦', gradient: 'from-green-600 to-emerald-700' },
+  Korean: { emoji: '🇰🇷', gradient: 'from-blue-400 to-indigo-500' },
+  Arabic: { emoji: '🇸🇦', gradient: 'from-green-600 to-emerald-700' },
 }
 
 const LEVEL_ORDER = ['beginner', 'intermediate', 'advanced']
@@ -73,8 +73,13 @@ function prereqMet(course: Course, profile: Profile & { levels?: Record<string, 
 
 type CourseTeacherRow = {
   teacher_id: string
-  profiles: Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url'> | null
-  teacher_profiles: Pick<TeacherProfile, 'years_experience' | 'certifications' | 'languages_taught' | 'rating' | 'review_count'> | null
+  profiles: Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url'> & {
+    years_experience?: number
+    certifications?: string[]
+    languages_taught?: { lang: string; proficiency: string }[]
+    rating?: number
+    review_count?: number
+  } | null
 }
 
 type ReviewRow = Review & { profiles: Pick<Profile, 'name'> | null }
@@ -99,8 +104,9 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
     supabase.from('course_modules').select('*').eq('course_id', id).order('week_number'),
     supabase
       .from('course_teachers')
-      .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio, avatar_url), teacher_profiles!teacher_profiles_user_id_fkey(years_experience, certifications, languages_taught, rating, review_count)')
-      .eq('course_id', id),
+      .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio, avatar_url, years_experience, certifications, languages_taught, rating, review_count)')
+      .eq('course_id', id)
+      .eq('status', 'approved'),
     supabase
       .from('reviews')
       .select('*, profiles:student_id(name)')
@@ -388,7 +394,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function TeacherCard({ teacher, gradient }: { teacher: CourseTeacherRow; gradient: string }) {
   const p = teacher.profiles
-  const tp = teacher.teacher_profiles
   return (
     <div className="border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 hover:border-brand-200 transition-colors">
       <div className="flex items-center gap-3">
@@ -397,19 +402,28 @@ function TeacherCard({ teacher, gradient }: { teacher: CourseTeacherRow; gradien
         </div>
         <div>
           <p className="font-bold text-gray-900 text-sm">{p?.name ?? 'Teacher'}</p>
-          {tp && (
-            <p className="text-xs text-gray-400">{tp.years_experience}y exp · ★ {Number(tp.rating).toFixed(1)}</p>
+          {p && (
+            <p className="text-xs text-gray-400">{p.years_experience ?? 0}y exp · ★ {Number(p.rating ?? 0).toFixed(1)}</p>
           )}
         </div>
       </div>
-      {tp?.languages_taught && tp.languages_taught.length > 0 && (
+      {p?.languages_taught && p.languages_taught.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {tp.languages_taught.map(l => (
-            <span key={l} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{l}</span>
+          {p.languages_taught.map(l => (
+            <span key={l.lang} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{l.lang}</span>
           ))}
         </div>
       )}
       {p?.bio && <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{p.bio}</p>}
+      <Link 
+        href={`/teachers/${teacher.teacher_id}`} 
+        target="_blank" 
+        rel="noopener noreferrer" 
+        className="mt-2 text-center py-2.5 rounded-xl border-2 border-brand-100 text-brand-600 font-bold text-xs hover:bg-brand-50 hover:border-brand-200 transition-all flex items-center justify-center gap-2"
+      >
+        <span>View Full Profile</span>
+        <span className="text-[10px]">→</span>
+      </Link>
     </div>
   )
 }

@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import type { Profile, Enrollment, Course } from '@/lib/supabase/types'
-// We will need a server action to process the manual assignment
 import { assignManualGroup } from '@/lib/admin/phase2-actions'
 
 type EnrollmentRow = Enrollment & {
-  profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null
+  profiles: (Pick<Profile, 'id' | 'name' | 'avatar_url'> & { availability?: string[] | null }) | null
   courses: Pick<Course, 'id' | 'name' | 'language' | 'level' | 'max_group_size' | 'sessions_per_week' | 'duration_weeks'> | null
 }
 
@@ -23,15 +22,25 @@ type Props = {
   teachers: TeacherData[]
 }
 
+import { localSlotsToUTC } from '@/lib/availability'
+
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const HOURS = Array.from({ length: 17 }, (_, i) => `${String(i + 6).padStart(2, '0')}:00`)
+const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, '0')}:00`)
 
 export function GroupBuilder({ pending, teachers }: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [teacherId, setTeacherId] = useState<string | null>(null)
-  const [slots, setSlots] = useState<string[]>([])
-  
+  const [slots, setSlots] = useState<string[]>([]) // These remain UTC keys
+  const [timezone, setTimezone] = useState<string>('UTC')
+  const [mounted, setMounted] = useState(false)
+
+  // Hydrate timezone
+  useEffect(() => {
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    setMounted(true)
+  }, [])
+
   const [isPending, startTransition] = useTransition()
   const [msg, setMsg] = useState<{ type: 'error' | 'success', text: string } | null>(null)
 
@@ -48,15 +57,31 @@ export function GroupBuilder({ pending, teachers }: Props) {
   const requiredSessions = activeCourse?.sessions_per_week ?? 0
 
   // Teachers matching course language
-  const matchingTeachers = teachers.filter(t => 
-    !activeCourse || t.languages_taught.some(l => l.lang.toLowerCase() === activeCourse.language.toLowerCase())
+  const matchingTeachers = teachers.filter(t =>
+    !activeCourse || t.languages_taught.some(l => l.lang?.toLowerCase() === activeCourse.language?.toLowerCase())
   )
   const activeTeacher = teachers.find(t => t.id === teacherId)
+
+  // Compute overlap: teacher availability ∩ all selected students' availability (UTC keys)
+  const studentAvailabilities = selectedEnrollments.map(e => new Set(e.profiles?.availability ?? []))
+  const teacherSet = new Set(activeTeacher?.availability ?? [])
+
+  function isOverlap(key: string): boolean {
+    if (!teacherSet.has(key)) return false
+    if (studentAvailabilities.length === 0) return true
+    return studentAvailabilities.every(s => s.has(key))
+  }
+  function isTeacherOnly(key: string): boolean {
+    return teacherSet.has(key) && !studentAvailabilities.every(s => s.has(key))
+  }
+
+  // To count overlaps accurately, we should check against all possible UTC slots
+  const overlapCount = DAYS.flatMap(d => Array.from({ length: 24 }, (_, i) => `${d}-${String(i).padStart(2, '0')}:00`))
+    .filter(k => isOverlap(k)).length
 
   function toggleStudent(id: string, courseId: string) {
     setSelectedIds(prev => {
       const next = new Set(prev)
-      // If clicking a different course, clear selection
       const first = [...next][0]
       if (first && pending.find(e => e.id === first)?.course_id !== courseId) {
         next.clear()
@@ -66,9 +91,9 @@ export function GroupBuilder({ pending, teachers }: Props) {
     })
   }
 
-  function handleSlotToggle(key: string) {
-    if (!activeTeacher?.availability.includes(key)) return // Can only pick from available slots
-    setSlots(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  function handleSlotToggle(utcKey: string) {
+    if (!isOverlap(utcKey)) return
+    setSlots(prev => prev.includes(utcKey) ? prev.filter(k => k !== utcKey) : [...prev, utcKey])
   }
 
   function handleSubmit() {
@@ -78,7 +103,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
         enrollmentIds: Array.from(selectedIds),
         courseId: activeCourse.id,
         teacherId,
-        slots
+        slots,
       })
       if (res.error) {
         setMsg({ type: 'error', text: res.error })
@@ -135,12 +160,12 @@ export function GroupBuilder({ pending, teachers }: Props) {
               <p className="font-semibold text-gray-900">Select students for a new group</p>
               <span className="text-sm text-gray-500">{selectedIds.size} selected</span>
             </div>
-            
+
             <div className="space-y-4">
               {Object.entries(pendingByCourse).map(([courseId, rows]) => {
                 const course = rows[0].courses
                 const isActiveCourse = activeCourse ? activeCourse.id === courseId : true
-                if (!isActiveCourse) return null // Hide other courses once one is selected
+                if (!isActiveCourse) return null
 
                 return (
                   <div key={courseId} className="border border-gray-200 rounded-xl p-4">
@@ -157,16 +182,20 @@ export function GroupBuilder({ pending, teachers }: Props) {
                       {rows.map(e => {
                         const isSelected = selectedIds.has(e.id)
                         const disabled = !isSelected && selectedIds.size >= (course?.max_group_size ?? 2)
+                        const avCount = e.profiles?.availability?.length ?? 0
                         return (
                           <button key={e.id} onClick={() => toggleStudent(e.id, courseId)} disabled={disabled}
                             className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 transition-all text-left ${
-                              isSelected ? 'border-[#6c4ff5] bg-purple-50' : 
+                              isSelected ? 'border-[#6c4ff5] bg-purple-50' :
                               disabled ? 'border-gray-100 opacity-50 cursor-not-allowed' : 'border-gray-200 hover:border-purple-200'
                             }`}>
                             <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
                               {e.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
                             </div>
-                            <span className={`text-sm font-medium ${isSelected ? 'text-[#6c4ff5]' : 'text-gray-700'}`}>{e.profiles?.name}</span>
+                            <div>
+                              <span className={`text-sm font-medium ${isSelected ? 'text-[#6c4ff5]' : 'text-gray-700'}`}>{e.profiles?.name}</span>
+                              <p className="text-[10px] text-gray-400">{avCount} avail. slots</p>
+                            </div>
                           </button>
                         )
                       })}
@@ -209,7 +238,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
                       </div>
                       <div>
                         <p className={`font-bold ${isSelected ? 'text-[#6c4ff5]' : 'text-gray-900'}`}>{t.name}</p>
-                        <p className="text-xs text-gray-500">{t.availability.length} hours available/week</p>
+                        <p className="text-xs text-gray-500">{t.availability.length} hourly slots/week</p>
                       </div>
                     </div>
                   </button>
@@ -218,7 +247,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
             </div>
 
             <div className="flex justify-end pt-4">
-              <button disabled={!teacherId} onClick={() => setStep(3)}
+              <button disabled={!teacherId} onClick={() => { setSlots([]); setStep(3) }}
                 className="px-6 py-2.5 rounded-xl bg-gray-900 text-white text-sm font-bold disabled:opacity-30 hover:bg-gray-800 transition-colors">
                 Continue to Schedule →
               </button>
@@ -231,8 +260,13 @@ export function GroupBuilder({ pending, teachers }: Props) {
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <p className="font-semibold text-gray-900">Select {requiredSessions} weekly session times</p>
-                <p className="text-sm text-gray-500 mt-1">Pick times from <span className="font-semibold">{activeTeacher.name}&apos;s</span> availability.</p>
+                <p className="font-semibold text-gray-900">Select {requiredSessions} weekly session time{requiredSessions !== 1 ? 's' : ''}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Only <span className="text-[#6c4ff5] font-semibold">purple overlap</span> cells (teacher + all {selectedIds.size} student{selectedIds.size !== 1 ? 's' : ''} free) are selectable.{' '}
+                  {overlapCount > 0
+                    ? `${overlapCount} overlapping hours found.`
+                    : 'No overlap found — check student timezones.'}
+                </p>
               </div>
               <div className="flex items-center gap-4">
                 <span className={`text-sm font-bold ${slots.length === requiredSessions ? 'text-emerald-600' : 'text-amber-600'}`}>
@@ -242,41 +276,54 @@ export function GroupBuilder({ pending, teachers }: Props) {
               </div>
             </div>
 
-            {/* Read-only availability grid where admin clicks to select slots */}
-            <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
-              <div className="min-w-[600px]">
-                <div className="grid bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: '60px repeat(7, 1fr)' }}>
-                  <div className="px-2 py-2.5 text-xs font-semibold text-gray-400 text-center">Time</div>
-                  {DAYS.map(d => <div key={d} className="py-2.5 text-xs font-bold text-gray-600 text-center border-l border-gray-100">{d}</div>)}
-                </div>
-                {HOURS.map(hour => (
-                  <div key={hour} className="grid border-b border-gray-50 last:border-0" style={{ gridTemplateColumns: '60px repeat(7, 1fr)' }}>
-                    <div className="px-2 py-2 text-xs text-gray-400 text-center self-center">{hour}</div>
-                    {DAYS.map(day => {
-                      const key = `${day}-${hour}`
-                      const isTeacherAvailable = activeTeacher.availability.includes(key)
-                      const isSelected = slots.includes(key)
-                      
-                      return (
-                        <div key={key} onClick={() => handleSlotToggle(key)}
-                          className={`border-l border-gray-50 h-8 transition-colors ${
-                            isSelected ? 'bg-[#6c4ff5] cursor-pointer' :
-                            isTeacherAvailable ? 'bg-emerald-50 hover:bg-emerald-100 cursor-pointer' : 'bg-white'
-                          }`}
-                        >
-                          {isSelected && <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">✓</div>}
-                        </div>
-                      )
-                    })}
+            {/* Schedule grid — all times in Local */}
+            {!mounted ? (
+              <div className="animate-pulse bg-gray-50 h-64 rounded-2xl border border-gray-100 flex items-center justify-center text-sm text-gray-400">Loading your local timezone...</div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-gray-100 shadow-sm max-h-[500px]">
+                <div className="min-w-[600px] sticky top-0 z-10">
+                  <div className="grid bg-gray-50 border-b border-gray-100" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
+                    <div className="px-2 py-2.5 text-[10px] font-semibold text-gray-400 text-center uppercase tracking-wider">{timezone.split('/').pop()?.replace('_', ' ')}</div>
+                    {DAYS.map(d => <div key={d} className="py-2.5 text-xs font-bold text-gray-600 text-center border-l border-gray-100">{d}</div>)}
                   </div>
-                ))}
+                </div>
+                <div className="min-w-[600px]">
+                  {HOURS.map(localHour => (
+                    <div key={localHour} className="grid border-b border-gray-50 last:border-0" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
+                      <div className="px-2 py-2 text-xs text-gray-400 text-center self-center">{localHour}</div>
+                      {DAYS.map(localDay => {
+                        const localKey = `${localDay}-${localHour}`
+                        const utcKey = localSlotsToUTC([localKey], timezone)[0]
+                        
+                        const overlap = isOverlap(utcKey)
+                        const teacherOnly = isTeacherOnly(utcKey)
+                        const isSelected = slots.includes(utcKey)
+
+                        return (
+                          <div key={localKey} onClick={() => handleSlotToggle(utcKey)}
+                            className={`border-l border-gray-50 h-8 transition-colors ${
+                              isSelected   ? 'bg-[#6c4ff5] cursor-pointer' :
+                              overlap      ? 'bg-purple-100 hover:bg-purple-200 cursor-pointer' :
+                              teacherOnly  ? 'bg-emerald-50' :
+                              'bg-white'
+                            }`}
+                          >
+                            {isSelected && <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">✓</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-center justify-between pt-4">
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-50 rounded" /> Teacher available</div>
-                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-[#6c4ff5] rounded" /> Selected slot</div>
+              <div className="flex items-center gap-4 text-xs flex-wrap">
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-100 rounded border border-purple-200" /> Teacher + all students free</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-50 rounded border border-emerald-200" /> Teacher only</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-[#6c4ff5] rounded" /> Selected</div>
+                <span className="text-gray-400">Times shown in your local timezone ({timezone})</span>
               </div>
               <button disabled={slots.length !== requiredSessions || isPending} onClick={handleSubmit}
                 className="px-6 py-2.5 rounded-xl bg-[#6c4ff5] text-white text-sm font-bold disabled:opacity-30 hover:bg-[#5c3de8] transition-colors shadow-md">

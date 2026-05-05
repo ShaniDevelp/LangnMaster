@@ -1,6 +1,6 @@
 'use server'
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 
 // ── Save pre-call topic / prep notes ─────────────────────────────────────────
 
@@ -12,8 +12,9 @@ export async function savePreCallNotes(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const admin = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await (admin as any)
     .from('sessions')
     .update({ topic: data.topic ?? null, prep_notes: data.prep_notes ?? null })
     .eq('id', sessionId)
@@ -29,8 +30,21 @@ export async function startSession(sessionId: string): Promise<{ error?: string 
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const admin = createAdminClient()
+  
+  // Verify user is the teacher of this session
+  const { data: session } = await admin
+    .from('sessions')
+    .select('group_id, groups!inner(teacher_id)')
+    .eq('id', sessionId)
+    .single()
+
+  if ((session as any)?.groups?.teacher_id !== user.id) {
+    return { error: 'Not authorized to start this session' }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await (admin as any)
     .from('sessions')
     .update({ status: 'active', started_at: new Date().toISOString() })
     .eq('id', sessionId)
@@ -62,9 +76,22 @@ export async function savePostCall(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  const admin = createAdminClient()
+
+  // Verify user is the teacher of this session
+  const { data: sessionData } = await admin
+    .from('sessions')
+    .select('group_id, groups!inner(teacher_id)')
+    .eq('id', sessionId)
+    .single()
+
+  if ((sessionData as any)?.groups?.teacher_id !== user.id) {
+    return { error: 'Not authorized to complete this session' }
+  }
+
   // 1. Update session fields + mark completed
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: sessErr } = await (supabase as any)
+  const { error: sessErr } = await (admin as any)
     .from('sessions')
     .update({
       session_notes: data.session_notes || null,
@@ -86,7 +113,7 @@ export async function savePostCall(
     }))
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: attErr } = await (supabase as any)
+    const { error: attErr } = await (admin as any)
       .from('session_attendance')
       .upsert(rows, { onConflict: 'session_id,student_id' })
 

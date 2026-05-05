@@ -40,21 +40,15 @@ export default async function PublicTeacherProfilePage({ params }: { params: Pro
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: profileRaw } = await (admin as any)
     .from('profiles')
-    .select('id, name, bio, avatar_url, created_at')
+    .select('id, name, bio, avatar_url, created_at, intro_video_url, years_experience, certifications, languages_taught, rating, review_count')
     .eq('id', id)
     .eq('role', 'teacher')
     .single()
 
   if (!profileRaw) notFound()
-  const profile = profileRaw as Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url' | 'created_at'>
+  const profile = profileRaw as Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url' | 'created_at' | 'intro_video_url' | 'years_experience' | 'certifications' | 'languages_taught' | 'rating' | 'review_count'>
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: tpRaw } = await (admin as any)
-    .from('teacher_profiles')
-    .select('*')
-    .eq('user_id', id)
-    .single()
-  const tp = (tpRaw ?? {}) as Partial<TeacherProfile>
+  const tp = profile as unknown as Partial<TeacherProfile>
 
   // Reviews
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

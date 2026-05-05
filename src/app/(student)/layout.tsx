@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SidebarNav } from '@/components/SidebarNav'
+import { StudentLayoutClient } from '@/components/StudentLayoutClient'
 import type { Profile } from '@/lib/supabase/types'
 
 export default async function StudentLayout({ children }: { children: React.ReactNode }) {
@@ -33,15 +34,8 @@ export default async function StudentLayout({ children }: { children: React.Reac
   if (!p.onboarding_completed) redirect('/student/onboarding')
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <SidebarNav profile={profile!} />
-
-      {/* Content — offset by sidebar on desktop */}
-      <div className="flex-1 flex flex-col min-h-screen lg:ml-64">
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-10 max-w-7xl w-full mx-auto lg:mx-0">
-          {children}
-        </main>
-      </div>
-    </div>
+    <StudentLayoutClient profile={profile!}>
+      {children}
+    </StudentLayoutClient>
   )
 }

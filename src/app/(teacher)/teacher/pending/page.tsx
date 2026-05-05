@@ -34,30 +34,16 @@ export default async function TeacherPendingPage() {
 
   const status: 'none' | 'pending' | 'approved' | 'rejected' = !app ? 'none' : app.status as 'pending' | 'approved' | 'rejected'
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30">
-      {/* Top bar */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-[#6c4ff5]">LangMaster</Link>
-          <div className="flex items-center gap-4">
-            {profile && (
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">
-                  {profile.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-sm font-medium text-gray-700 hidden sm:block">{profile.name}</span>
-              </div>
-            )}
-            <form action={signOut}>
-              <button type="submit" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
-                Sign out
-              </button>
-            </form>
-          </div>
-        </div>
-      </header>
+  // If the DB state has advanced (or regressed), force a cookie refresh
+  if (status === 'approved' || status === 'none') {
+    redirect(`/api/auth/set-teacher-state?next=${status === 'approved' ? '/teacher/onboarding' : '/teacher/application'}`)
+  }
+  
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const displayStatus = status as any
 
+  return (
+    <div className="w-full">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-20">
         <div className="lg:grid lg:grid-cols-2 lg:gap-16 xl:gap-24 items-start">
 
@@ -65,29 +51,29 @@ export default async function TeacherPendingPage() {
           <div className="mb-10 lg:mb-0">
             {/* Status icon */}
             <div className={`inline-flex items-center justify-center w-20 h-20 rounded-3xl text-4xl mb-6 shadow-lg ${
-              status === 'rejected' ? 'bg-red-50 shadow-red-100' :
-              status === 'approved' ? 'bg-emerald-50 shadow-emerald-100' :
+              displayStatus === 'rejected' ? 'bg-red-50 shadow-red-100' :
+              displayStatus === 'approved' ? 'bg-emerald-50 shadow-emerald-100' :
               'bg-amber-50 shadow-amber-100'
             }`}>
-              {status === 'rejected' ? '❌' : status === 'approved' ? '🎉' : status === 'pending' ? '⏳' : '📋'}
+              {displayStatus === 'rejected' ? '❌' : displayStatus === 'approved' ? '🎉' : displayStatus === 'pending' ? '⏳' : '📋'}
             </div>
 
             <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-tight mb-3">
-              {status === 'rejected'  && 'Application not approved'}
-              {status === 'pending'   && 'Application under review'}
-              {status === 'approved'  && "You're approved!"}
-              {status === 'none'      && 'Complete your application'}
+              {displayStatus === 'rejected'  && 'Application not approved'}
+              {displayStatus === 'pending'   && 'Application under review'}
+              {displayStatus === 'approved'  && "You're approved!"}
+              {displayStatus === 'none'      && 'Complete your application'}
             </h1>
 
             <p className="text-gray-500 text-base leading-relaxed mb-8 max-w-md">
-              {status === 'rejected'  && "Unfortunately your application wasn't approved at this time. You can reapply with updated information."}
-              {status === 'pending'   && `Submitted ${formatDate(app!.submitted_at)}. Our team reviews every application within 48 hours — we'll email you with our decision.`}
-              {status === 'approved'  && 'Your application has been approved. Complete your onboarding wizard to start teaching.'}
-              {status === 'none'      && "You haven't submitted your teacher application yet. It takes about 5 minutes."}
+              {displayStatus === 'rejected'  && "Unfortunately your application wasn't approved at this time. You can reapply with updated information."}
+              {displayStatus === 'pending'   && `Submitted ${formatDate(app!.submitted_at)}. Our team reviews every application within 48 hours — we'll email you with our decision.`}
+              {displayStatus === 'approved'  && 'Your application has been approved. Complete your onboarding wizard to start teaching.'}
+              {displayStatus === 'none'      && "You haven't submitted your teacher application yet. It takes about 5 minutes."}
             </p>
 
             {/* Admin feedback on rejection */}
-            {status === 'rejected' && app?.admin_notes && (
+            {displayStatus === 'rejected' && app?.admin_notes && (
               <div className="bg-red-50 border border-red-100 rounded-2xl p-5 mb-8 max-w-md">
                 <p className="text-sm font-semibold text-red-800 mb-1.5">Feedback from our team</p>
                 <p className="text-sm text-red-700">{app.admin_notes}</p>
@@ -96,13 +82,13 @@ export default async function TeacherPendingPage() {
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-3">
-              {(status === 'none' || status === 'rejected') && (
+              {(displayStatus === 'none' || displayStatus === 'rejected') && (
                 <Link href="/teacher/application"
                   className="inline-flex items-center justify-center px-8 py-4 rounded-2xl bg-[#6c4ff5] text-white font-bold text-base hover:bg-[#5c3de8] transition-colors shadow-lg shadow-purple-200">
-                  {status === 'rejected' ? 'Reapply now →' : 'Start application →'}
+                  {displayStatus === 'rejected' ? 'Reapply now →' : 'Start application →'}
                 </Link>
               )}
-              {status === 'approved' && (
+              {displayStatus === 'approved' && (
                 <Link href="/teacher/onboarding"
                   className="inline-flex items-center justify-center px-8 py-4 rounded-2xl bg-[#6c4ff5] text-white font-bold text-base hover:bg-[#5c3de8] transition-colors shadow-lg shadow-purple-200">
                   Complete onboarding →
@@ -119,7 +105,7 @@ export default async function TeacherPendingPage() {
           <div className="space-y-5">
 
             {/* Status detail card */}
-            {status === 'pending' && (
+            {displayStatus === 'pending' && (
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 <div className="bg-amber-50 border-b border-amber-100 px-6 py-4 flex items-center justify-between">
                   <p className="text-sm font-semibold text-amber-800">Application status</p>
@@ -161,21 +147,21 @@ export default async function TeacherPendingPage() {
                 {[
                   {
                     step: '1', icon: '📝', title: 'Application submitted',
-                    desc: status === 'none' ? 'Fill in the form — takes about 5 min.' : `Submitted ${app ? formatDate(app.submitted_at) : ''}`,
-                    done: status !== 'none',
-                    active: status === 'none',
+                    desc: displayStatus === 'none' ? 'Fill in the form — takes about 5 min.' : `Submitted ${app ? formatDate(app.submitted_at) : ''}`,
+                    done: displayStatus !== 'none',
+                    active: displayStatus === 'none',
                   },
                   {
                     step: '2', icon: '🔍', title: 'Under review',
                     desc: 'We check your experience and availability.',
-                    done: status === 'approved',
-                    active: status === 'pending',
+                    done: displayStatus === 'approved',
+                    active: displayStatus === 'pending',
                   },
                   {
                     step: '3', icon: '🎯', title: 'Onboarding wizard',
                     desc: 'Set your schedule, preferences & test your device.',
                     done: false,
-                    active: status === 'approved',
+                    active: displayStatus === 'approved',
                   },
                   {
                     step: '4', icon: '🎥', title: 'Start teaching',

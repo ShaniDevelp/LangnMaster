@@ -58,7 +58,8 @@ export async function signIn(formData: FormData) {
   cookieStore.set(ROLE_COOKIE, role, COOKIE_OPTS)
 
   if (role === 'admin') redirect('/admin/dashboard')
-  if (role === 'teacher') redirect('/teacher/dashboard')
+  // Teachers must go through the state machine so the proxy gets fresh cookies
+  if (role === 'teacher') redirect('/api/auth/set-teacher-state?next=/teacher/dashboard')
   redirect('/student/dashboard')
 }
 
@@ -85,7 +86,11 @@ export async function signInAdmin(formData: FormData) {
 export async function signOut() {
   const supabase = await createClient()
   const cookieStore = await cookies()
+  // Clear role + all teacher-state cookies so they never bleed into a new session
   cookieStore.delete(ROLE_COOKIE)
+  cookieStore.delete('x-teacher-app-submitted')
+  cookieStore.delete('x-teacher-approved')
+  cookieStore.delete('x-teacher-onboarded')
   await supabase.auth.signOut()
   redirect('/login')
 }

@@ -29,7 +29,7 @@ export default async function AdminEnrollmentsPage() {
   // 1. Fetch Enrollments
   const { data: enrollmentsRaw } = await supabase
     .from('enrollments')
-    .select('*, profiles:user_id(id, name, avatar_url), courses(id, name, language, level, max_group_size, sessions_per_week, duration_weeks)')
+    .select('*, profiles:user_id(id, name, avatar_url, availability), courses(id, name, language, level, max_group_size, sessions_per_week, duration_weeks)')
     .order('enrolled_at', { ascending: false })
 
   const enrollments = (enrollmentsRaw ?? []) as unknown as EnrollmentRow[]
@@ -38,25 +38,15 @@ export default async function AdminEnrollmentsPage() {
   // 2. Fetch Teachers for the Group Builder
   const { data: teachersRaw } = await supabase
     .from('profiles')
-    .select('id, name, avatar_url, availability')
+    .select('id, name, avatar_url, availability, languages_taught')
     .eq('role', 'teacher')
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: tpRaw } = await (supabase as any)
-    .from('teacher_profiles')
-    .select('user_id, languages_taught')
-
-  const tpMap = ((tpRaw ?? []) as { user_id: string; languages_taught: { lang: string; proficiency: string }[] }[]).reduce((acc, tp) => {
-    acc[tp.user_id] = tp.languages_taught ?? []
-    return acc
-  }, {} as Record<string, { lang: string; proficiency: string }[]>)
-
-  const teachers: TeacherData[] = ((teachersRaw ?? []) as { id: string; name: string; avatar_url: string | null; availability: string[] | null }[]).map(t => ({
+  const teachers: TeacherData[] = ((teachersRaw ?? []) as { id: string; name: string; avatar_url: string | null; availability: string[] | null; languages_taught: { lang: string; proficiency: string }[] | null }[]).map(t => ({
     id: t.id,
     name: t.name,
     avatar_url: t.avatar_url,
     availability: t.availability ?? [],
-    languages_taught: tpMap[t.id] ?? []
+    languages_taught: t.languages_taught ?? []
   }))
 
   return (

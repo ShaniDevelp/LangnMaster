@@ -120,3 +120,21 @@ function generateSessions(groupId: string, weekStart: string, sessionsPerWeek: n
   }
   return sessions
 }
+
+export async function resolveTeacherCourseRequest(requestId: string, status: 'approved' | 'rejected'): Promise<{ error?: string } | void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if ((profile as { role: string } | null)?.role !== 'admin') return { error: 'Unauthorized' }
+
+  const { error } = await supabase
+    .from('course_teachers')
+    .update({ status })
+    .eq('id', requestId)
+
+  if (error) return { error: error.message }
+  
+  revalidatePath('/admin/requests')
+}

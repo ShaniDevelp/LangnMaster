@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react'
 import { updateProfile } from '@/lib/student/actions'
 import type { Profile, Enrollment, Course } from '@/lib/supabase/types'
+import { AvailabilityPicker } from '@/components/AvailabilityPicker'
 
 type EnrollmentRow = Enrollment & { courses: Pick<Course, 'name' | 'language'> | null }
 
@@ -242,47 +243,25 @@ export default function ProfileForm({ profile, enrollments }: Props) {
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-gray-700 mb-2">When are you free for sessions?</p>
-          <p className="text-xs text-gray-400 mb-3">Select all time windows that work for you.</p>
-          <div className="overflow-x-auto -mx-1">
-            <div className="min-w-[420px] px-1">
-              <div className="grid gap-1" style={{ gridTemplateColumns: `auto repeat(7, 1fr)` }}>
-                {/* Header */}
-                <div />
-                {DAY_LABEL.map(d => (
-                  <div key={d} className="text-center text-xs font-semibold text-gray-500 py-1">{d}</div>
-                ))}
-                {/* Rows */}
-                {SLOTS.map((slot, si) => (
-                  <>
-                    <div key={`label-${slot}`} className="text-right text-[10px] text-gray-400 pr-2 flex items-center justify-end whitespace-pre-line leading-tight">
-                      {SLOT_LABEL[si]}
-                    </div>
-                    {DAYS.map(day => {
-                      const key = `${day}-${slot}`
-                      const selected = availability.includes(key)
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => toggleAvailability(key)}
-                          className={`h-9 rounded-lg border text-xs font-medium transition-all ${
-                            selected
-                              ? 'bg-brand-500 border-brand-500 text-white'
-                              : 'bg-gray-50 border-gray-200 text-gray-400 hover:border-brand-300 hover:text-brand-600'
-                          }`}
-                        >
-                          {selected ? '✓' : ''}
-                        </button>
-                      )
-                    })}
-                  </>
-                ))}
-              </div>
+          <p className="text-sm font-semibold text-gray-700 mb-1">When are you free for sessions?</p>
+          <p className="text-xs text-gray-400 mb-3">
+            Click a period to select all hours. Use ▼ to fine-tune specific hours.
+            Times shown in your timezone · stored in UTC.
+          </p>
+          {timezone ? (
+            <AvailabilityPicker
+              utcSlots={availability}
+              timezone={timezone}
+              onChange={setAvailability}
+            />
+          ) : (
+            <div className="bg-gray-50 rounded-2xl p-4 text-center text-sm text-gray-400">
+              Select your timezone first.
             </div>
-          </div>
+          )}
         </div>
       </div>
+
 
       {/* Goals */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-3">

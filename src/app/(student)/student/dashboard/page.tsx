@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import type { Course, Enrollment, Session, Group, Profile, TeacherProfile } from '@/lib/supabase/types'
+import type { Course, Enrollment, Session, Group, Profile } from '@/lib/supabase/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,8 +14,11 @@ type SessionRow = Session & {
 }
 type TeacherRow = {
   teacher_id: string
-  profiles: Pick<Profile, 'id' | 'name' | 'bio'> | null
-  teacher_profiles: Pick<TeacherProfile, 'years_experience' | 'languages_taught' | 'rating'> | null
+  profiles: Pick<Profile, 'id' | 'name' | 'bio'> & {
+    years_experience?: number
+    languages_taught?: { lang: string; proficiency: string }[]
+    rating?: number
+  } | null
 }
 type GroupDetailRow = {
   id: string
@@ -24,8 +27,11 @@ type GroupDetailRow = {
   week_start: string
   status: string
   courses: Pick<Course, 'name' | 'language' | 'sessions_per_week' | 'duration_weeks'> | null
-  profiles: Pick<Profile, 'id' | 'name' | 'bio'> | null
-  teacher_profiles: Pick<TeacherProfile, 'years_experience' | 'rating' | 'languages_taught'> | null
+  profiles: Pick<Profile, 'id' | 'name' | 'bio'> & {
+    years_experience?: number
+    rating?: number
+    languages_taught?: { lang: string; proficiency: string }[]
+  } | null
 }
 type PartnerRow = {
   user_id: string
@@ -159,7 +165,7 @@ export default async function StudentDashboard() {
         .eq('status', 'completed'),
       supabase
         .from('groups')
-        .select('id, course_id, teacher_id, week_start, status, courses(name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name, bio), teacher_profiles:teacher_id(years_experience, rating, languages_taught)')
+        .select('id, course_id, teacher_id, week_start, status, courses(name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name, bio, years_experience, rating, languages_taught)')
         .in('id', groupIds)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
@@ -200,7 +206,7 @@ export default async function StudentDashboard() {
     if (pendingCourseIds.length > 0) {
       const { data } = await supabase
         .from('course_teachers')
-        .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio), teacher_profiles!teacher_profiles_user_id_fkey(years_experience, languages_taught, rating)')
+        .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio, years_experience, languages_taught, rating)')
         .in('course_id', pendingCourseIds)
         .limit(4)
       pendingTeachers = (data ?? []) as unknown as TeacherRow[]
@@ -309,15 +315,15 @@ export default async function StudentDashboard() {
                     <p className="font-bold text-gray-900">{groupDetails.profiles?.name ?? 'Your Teacher'}</p>
                     <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">Teacher</span>
                   </div>
-                  {groupDetails.teacher_profiles && (
+                  {groupDetails.profiles && (
                     <p className="text-xs text-gray-400 mb-1.5">
-                      {groupDetails.teacher_profiles.years_experience}y exp · ★ {Number(groupDetails.teacher_profiles.rating).toFixed(1)}
+                      {groupDetails.profiles.years_experience ?? 0}y exp · ★ {Number(groupDetails.profiles.rating ?? 0).toFixed(1)}
                     </p>
                   )}
-                  {groupDetails.teacher_profiles?.languages_taught?.length ? (
+                  {groupDetails.profiles?.languages_taught?.length ? (
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {groupDetails.teacher_profiles.languages_taught.slice(0, 3).map(l => (
-                        <span key={l} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{l}</span>
+                      {groupDetails.profiles.languages_taught.slice(0, 3).map(l => (
+                        <span key={l.lang} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{l.lang}</span>
                       ))}
                     </div>
                   ) : null}
@@ -460,15 +466,15 @@ export default async function StudentDashboard() {
                       {t.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
                     </div>
                     <p className="font-bold text-gray-900 text-sm">{t.profiles?.name ?? 'Teacher'}</p>
-                    {t.teacher_profiles && (
+                    {t.profiles && (
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {t.teacher_profiles.years_experience}y exp · ★ {Number(t.teacher_profiles.rating).toFixed(1)}
+                        {t.profiles.years_experience ?? 0}y exp · ★ {Number(t.profiles.rating ?? 0).toFixed(1)}
                       </p>
                     )}
-                    {t.teacher_profiles?.languages_taught?.length ? (
+                    {t.profiles?.languages_taught?.length ? (
                       <div className="flex flex-wrap justify-center gap-1 mt-2">
-                        {t.teacher_profiles.languages_taught.slice(0, 2).map(l => (
-                          <span key={l} className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{l}</span>
+                        {t.profiles.languages_taught.slice(0, 2).map(l => (
+                          <span key={l.lang} className="text-[10px] bg-purple-50 text-purple-700 px-2 py-0.5 rounded-full">{l.lang}</span>
                         ))}
                       </div>
                     ) : null}

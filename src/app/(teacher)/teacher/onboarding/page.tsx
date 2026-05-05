@@ -2,8 +2,8 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { saveTeacherOnboarding } from '@/lib/teacher/actions'
-
-// ── Data ─────────────────────────────────────────────────────────────────────
+import { AvailabilityPicker } from '@/components/AvailabilityPicker'
+import { useRouter } from 'next/navigation'
 
 const TIMEZONES = [
   { label: 'UTC-8  Pacific (US & Canada)',       value: 'America/Los_Angeles' },
@@ -26,8 +26,6 @@ const TIMEZONES = [
   { label: 'UTC+12  Auckland / Fiji',            value: 'Pacific/Auckland' },
 ]
 
-const DAYS  = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const SLOTS = ['Morning', 'Afternoon', 'Evening']
 const LEVELS = ['beginner', 'intermediate', 'advanced']
 const DURATIONS = [
   { key: '45', label: '45 min', desc: 'Focused, efficient' },
@@ -36,16 +34,15 @@ const DURATIONS = [
 ]
 
 const STEPS = [
-  { id: 0, icon: '📅', label: 'Schedule',    title: 'When can you teach?',          sub: 'Set your timezone and recurring weekly slots — admin schedules groups around this.' },
-  { id: 1, icon: '🎯', label: 'Preferences', title: 'How do you like to teach?',    sub: 'Help us match you with the right students and session format.' },
-  { id: 2, icon: '📹', label: 'Device check', title: 'Camera & microphone check',   sub: 'Make sure your setup is ready before your first live session.' },
-  { id: 3, icon: '🎉', label: 'Done!',        title: "You're all set!",              sub: "Your profile is complete. Here's what happens next." },
+  { title: 'When can you teach?', sub: 'Set your timezone and recurring weekly slots' },
+  { title: 'Teaching preferences', sub: 'Help us match you with the right students' },
+  { title: 'Device check', sub: 'Ensure your camera & microphone are working' },
+  { title: "You're all set!", sub: 'Your profile is ready to go.' },
 ]
 
-// ── Component ─────────────────────────────────────────────────────────────────
-
 export default function TeacherOnboardingPage() {
-  const [step, setStep] = useState(0)
+  const router = useRouter()
+  const [step, setStep] = useState(0) // 0 to 3
 
   // Step 0
   const [timezone, setTimezone] = useState('')
@@ -55,7 +52,7 @@ export default function TeacherOnboardingPage() {
   const [preferredLevels, setPreferredLevels] = useState<string[]>([])
   const [preferredDuration, setPreferredDuration] = useState('60')
 
-  // Step 2 — device check
+  // Step 2
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [cameraOk, setCameraOk] = useState(false)
   const [micOk, setMicOk] = useState(false)
@@ -72,13 +69,10 @@ export default function TeacherOnboardingPage() {
     if (stream && videoRef.current) videoRef.current.srcObject = stream
   }, [stream])
 
-  function toggleSlot(day: string, slot: string) {
-    const key = `${day.toLowerCase()}-${slot.toLowerCase()}`
-    setAvailability(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
-  }
   function toggleLevel(level: string) {
     setPreferredLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level])
   }
+
   async function testDevices() {
     try {
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
@@ -91,372 +85,224 @@ export default function TeacherOnboardingPage() {
   function canAdvance(): boolean {
     if (step === 0) return !!timezone && availability.length >= 1
     if (step === 1) return preferredLevels.length > 0
-    return true
+    if (step === 2) return true // Device check is skippable technically, but nice to have
+    if (step === 3) return true
+    return false
   }
 
   function handleNext() {
-    if (step < STEPS.length - 1) setStep(s => s + 1)
-  }
-  function handleFinish() {
+    if (step < 3) { setStep(s => s + 1); return }
     setError(null)
     startTransition(async () => {
       const result = await saveTeacherOnboarding({
-        timezone, availability,
-        preferences: { preferredLevels, preferredDuration },
+        timezone,
+        availability,
+        preferences: {
+          preferredLevels,
+          preferredDuration
+        }
       })
-      if (result && 'error' in result) setError(result.error)
+      if (result && 'error' in result) {
+        setError(result.error)
+      } else {
+        router.push('/teacher/dashboard')
+      }
     })
   }
 
-  const progressPct = ((step + 1) / STEPS.length) * 100
+  const progress = ((step + 1) / 4) * 100
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex flex-col">
       {/* Top bar */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-[#6c4ff5]">LangMaster</Link>
-          <span className="text-sm text-gray-400">Teacher Onboarding · Step {step + 1} of {STEPS.length}</span>
-        </div>
-        {/* Progress bar */}
-        <div className="h-0.5 bg-gray-100">
-          <div className="h-full bg-[#6c4ff5] transition-all duration-500 ease-out" style={{ width: `${progressPct}%` }} />
-        </div>
-      </header>
+      <div className="flex items-center justify-between px-4 sm:px-6 py-4 max-w-2xl mx-auto w-full">
+        <Link href="/" className="text-lg font-bold text-brand-500">LangMaster</Link>
+        <span className="text-sm text-gray-400">Step {step + 1} of 4</span>
+      </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-        <div className="lg:grid lg:grid-cols-[260px_1fr] lg:gap-12 xl:gap-16">
+      {/* Progress */}
+      <div className="w-full bg-gray-100 h-1">
+        <div className="bg-brand-500 h-1 transition-all duration-500" style={{ width: `${progress}%` }} />
+      </div>
 
-          {/* ── Left sidebar: step navigator ── */}
-          <aside className="mb-8 lg:mb-0">
-            <div className="lg:sticky lg:top-24 space-y-2">
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Steps</p>
-              {STEPS.map(s => {
-                const isDone    = s.id < step
-                const isCurrent = s.id === step
-                return (
-                  <div key={s.id} className={`flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all ${
-                    isCurrent ? 'bg-[#6c4ff5] text-white shadow-lg shadow-purple-200' :
-                    isDone    ? 'bg-emerald-50 text-emerald-700' :
-                    'text-gray-400'
-                  }`}>
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-base flex-shrink-0 ${
-                      isCurrent ? 'bg-white/20' : isDone ? 'bg-emerald-100' : 'bg-gray-100'
-                    }`}>
-                      {isDone ? '✓' : s.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <p className={`text-sm font-semibold truncate ${isCurrent ? 'text-white' : isDone ? 'text-emerald-700' : 'text-gray-500'}`}>
-                        {s.label}
-                      </p>
-                      {isCurrent && <p className="text-xs text-white/70 truncate mt-0.5">In progress</p>}
-                      {isDone    && <p className="text-xs text-emerald-500 mt-0.5">Complete</p>}
-                    </div>
-                  </div>
-                )
-              })}
+      {/* Main card */}
+      <div className="flex-1 flex items-start justify-center px-4 sm:px-6 py-8">
+        <div className="w-full max-w-2xl">
+          <div className="mb-6 sm:mb-8">
+            <p className="text-xs sm:text-sm font-semibold text-brand-500 uppercase tracking-wider mb-1">
+              Step {step + 1} — {STEPS[step].title}
+            </p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{STEPS[step].title}</h1>
+            <p className="text-gray-500 text-sm sm:text-base mt-1">{STEPS[step].sub}</p>
+          </div>
 
-              {/* Tip card */}
-              <div className="mt-6 bg-purple-50 rounded-2xl p-4">
-                <p className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-2">Tip</p>
-                <p className="text-sm text-purple-700 leading-relaxed">
-                  {step === 0 && 'Pick every slot you\'re available — more slots means better group matching.'}
-                  {step === 1 && 'You can be assigned groups outside your preferences if there\'s high demand.'}
-                  {step === 2 && 'Use Chrome or Edge for the best WebRTC camera experience.'}
-                  {step === 3 && 'Check your email — we\'ll notify you as soon as a group is assigned.'}
-                </p>
-              </div>
-            </div>
-          </aside>
-
-          {/* ── Right: step content ── */}
-          <main>
-            {/* Step header */}
-            <div className="mb-8">
-              <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#6c4ff5] bg-purple-50 px-3 py-1.5 rounded-full mb-3">
-                <span>{STEPS[step].icon}</span>
-                <span>Step {step + 1} — {STEPS[step].label}</span>
-              </div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{STEPS[step].title}</h1>
-              <p className="text-gray-500 mt-1.5 text-base">{STEPS[step].sub}</p>
-            </div>
-
-            {/* ── Step 0: Timezone + Availability ── */}
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-5 sm:p-8">
+            
+            {/* Step 0: Schedule */}
             {step === 0 && (
-              <div className="space-y-8">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Your timezone <span className="text-red-500">*</span>
-                  </label>
+              <div className="space-y-6">
+                <div className="max-w-sm">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Your timezone <span className="text-red-500">*</span></label>
                   <select value={timezone} onChange={e => setTimezone(e.target.value)}
-                    className="w-full sm:max-w-sm px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent bg-white">
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white">
                     <option value="" disabled>Select your timezone…</option>
                     {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
                   </select>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <div className="flex items-start justify-between mb-1">
-                    <label className="text-sm font-semibold text-gray-700">
-                      Weekly availability <span className="text-red-500">*</span>
-                    </label>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-semibold text-gray-700">Weekly slots <span className="text-red-500">*</span></label>
                     {availability.length > 0 && (
-                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full">
+                      <span className="text-xs font-semibold text-brand-500 bg-brand-50 px-2.5 py-1 rounded-full">
                         {availability.length} slot{availability.length !== 1 ? 's' : ''} selected
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mb-5">Morning = 6am–12pm · Afternoon = 12pm–6pm · Evening = 6pm–11pm (your timezone)</p>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full">
-                      <thead>
-                        <tr>
-                          <th className="w-28" />
-                          {DAYS.map(d => (
-                            <th key={d} className="pb-3 text-xs font-semibold text-gray-500 text-center min-w-[48px]">{d}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {SLOTS.map(slot => (
-                          <tr key={slot}>
-                            <td className="pr-4 py-2 text-sm text-gray-500 font-medium whitespace-nowrap">{slot}</td>
-                            {DAYS.map(day => {
-                              const key = `${day.toLowerCase()}-${slot.toLowerCase()}`
-                              const active = availability.includes(key)
-                              return (
-                                <td key={day} className="py-2 px-1 text-center">
-                                  <button type="button" onClick={() => toggleSlot(day, slot)}
-                                    aria-label={`${day} ${slot}`} aria-pressed={active}
-                                    className={`w-10 h-10 rounded-xl text-xs font-semibold transition-all ${
-                                      active ? 'bg-[#6c4ff5] text-white shadow-md shadow-purple-200'
-                                             : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-[#6c4ff5]'
-                                    }`}>
-                                    {active ? '✓' : ''}
-                                  </button>
-                                </td>
-                              )
-                            })}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <p className="text-xs text-gray-400 mb-5">
+                    Click a period to select all hours. Use ▼ to fine-tune individual hours.
+                    Times shown in your timezone · stored in UTC.
+                  </p>
+                  {timezone ? (
+                    <AvailabilityPicker
+                      utcSlots={availability}
+                      timezone={timezone}
+                      onChange={setAvailability}
+                    />
+                  ) : (
+                    <div className="bg-gray-50 rounded-2xl p-5 text-center text-sm text-gray-400">
+                      Select your timezone above first.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* ── Step 1: Teaching preferences ── */}
+            {/* Step 1: Preferences */}
             {step === 1 && (
-              <div className="space-y-6">
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">
-                    Preferred student levels <span className="text-red-500">*</span>
-                  </label>
-                  <p className="text-sm text-gray-400 mb-4">You can be assigned groups outside these levels when demand is high.</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-8">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Preferred student levels <span className="text-red-500">*</span></label>
+                  <div className="grid sm:grid-cols-3 gap-3">
                     {LEVELS.map(level => {
-                      const sel = preferredLevels.includes(level)
+                      const active = preferredLevels.includes(level)
                       return (
                         <button key={level} type="button" onClick={() => toggleLevel(level)}
-                          className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
-                            sel ? 'border-[#6c4ff5] bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200 hover:bg-purple-50/40'
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            active ? 'border-brand-500 bg-brand-50' : 'border-gray-100 hover:border-brand-200'
                           }`}>
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                            sel ? 'border-[#6c4ff5] bg-[#6c4ff5]' : 'border-gray-300'
-                          }`}>
-                            {sel && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
+                          <div className={`w-5 h-5 rounded flex items-center justify-center mb-2 ${active ? 'bg-brand-500 text-white' : 'bg-gray-200'}`}>
+                            {active ? '✓' : ''}
                           </div>
-                          <div>
-                            <p className={`font-semibold text-sm capitalize ${sel ? 'text-[#6c4ff5]' : 'text-gray-700'}`}>{level}</p>
-                            <p className="text-xs text-gray-400">
-                              {level === 'beginner' ? 'A1–A2 students' : level === 'intermediate' ? 'B1–B2 students' : 'C1–C2 students'}
-                            </p>
-                          </div>
+                          <p className={`font-bold capitalize ${active ? 'text-brand-700' : 'text-gray-900'}`}>{level}</p>
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <label className="block text-sm font-semibold text-gray-700 mb-4">Preferred session duration</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {DURATIONS.map(d => (
-                      <button key={d.key} type="button" onClick={() => setPreferredDuration(d.key)}
-                        className={`flex items-center gap-3 p-4 rounded-2xl border-2 text-left transition-all ${
-                          preferredDuration === d.key ? 'border-[#6c4ff5] bg-purple-50' : 'border-gray-100 bg-white hover:border-purple-200 hover:bg-purple-50/40'
-                        }`}>
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                          preferredDuration === d.key ? 'border-[#6c4ff5] bg-[#6c4ff5]' : 'border-gray-300'
-                        }`}>
-                          {preferredDuration === d.key && <div className="w-2.5 h-2.5 rounded-full bg-white" />}
-                        </div>
-                        <div>
-                          <p className={`font-bold text-sm ${preferredDuration === d.key ? 'text-[#6c4ff5]' : 'text-gray-700'}`}>{d.label}</p>
-                          <p className="text-xs text-gray-400">{d.desc}</p>
-                        </div>
-                      </button>
-                    ))}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Standard session duration <span className="text-red-500">*</span></label>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    {DURATIONS.map(d => {
+                      const active = preferredDuration === d.key
+                      return (
+                        <button key={d.key} type="button" onClick={() => setPreferredDuration(d.key)}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            active ? 'border-brand-500 bg-brand-50' : 'border-gray-100 hover:border-brand-200'
+                          }`}>
+                          <div className={`w-4 h-4 rounded-full border-2 mb-2 flex items-center justify-center ${
+                            active ? 'border-brand-500' : 'border-gray-300'
+                          }`}>
+                            {active && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                          </div>
+                          <p className={`font-bold ${active ? 'text-brand-700' : 'text-gray-900'}`}>{d.label}</p>
+                          <p className="text-xs text-gray-500 mt-1">{d.desc}</p>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
             )}
 
-            {/* ── Step 2: Device check ── */}
+            {/* Step 2: Device check */}
             {step === 2 && (
               <div className="space-y-6">
-                {/* Camera + status side by side on desktop */}
-                <div className="grid lg:grid-cols-2 gap-6">
-                  {/* Camera preview */}
-                  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="bg-gray-900 aspect-video flex items-center justify-center">
-                      {stream ? (
-                        <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex flex-col items-center gap-3 text-gray-500">
-                          <span className="text-5xl">📹</span>
-                          <p className="text-sm">Camera preview appears here</p>
-                        </div>
-                      )}
+                <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden relative shadow-inner">
+                  {stream ? (
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center text-3xl">📹</div>
                     </div>
-                    <div className="p-4 flex gap-3">
-                      {!stream ? (
-                        <button type="button" onClick={testDevices}
-                          className="flex-1 py-3 rounded-xl bg-[#6c4ff5] text-white font-semibold text-sm hover:bg-[#5c3de8] transition-colors">
-                          Test camera & microphone
-                        </button>
-                      ) : (
-                        <button type="button" onClick={() => { stream.getTracks().forEach(t => t.stop()); setStream(null); setCameraOk(false); setMicOk(false) }}
-                          className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50 transition-colors">
-                          Stop preview
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Device status + tips */}
-                  <div className="space-y-4">
-                    {/* Status cards */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className={`p-4 rounded-2xl border-2 text-center ${cameraOk ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100 bg-white'}`}>
-                        <span className="text-2xl block mb-1.5">{cameraOk ? '✅' : '📷'}</span>
-                        <p className="text-sm font-semibold text-gray-700">Camera</p>
-                        <p className={`text-xs mt-0.5 font-medium ${cameraOk ? 'text-emerald-600' : 'text-gray-400'}`}>
-                          {cameraOk ? 'Working' : 'Not tested'}
-                        </p>
-                      </div>
-                      <div className={`p-4 rounded-2xl border-2 text-center ${micOk ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100 bg-white'}`}>
-                        <span className="text-2xl block mb-1.5">{micOk ? '✅' : '🎤'}</span>
-                        <p className="text-sm font-semibold text-gray-700">Microphone</p>
-                        <p className={`text-xs mt-0.5 font-medium ${micOk ? 'text-emerald-600' : 'text-gray-400'}`}>
-                          {micOk ? 'Working' : 'Not tested'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Tips */}
-                    <div className="bg-blue-50 rounded-2xl p-5 space-y-2.5">
-                      <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Device tips</p>
-                      {[
-                        '💡 Use Chrome or Edge for best performance',
-                        '🎧 A headset reduces echo for students',
-                        '💡 Good lighting = better video quality',
-                        '📶 Wired internet is more stable than WiFi',
-                      ].map((t, i) => (
-                        <p key={i} className="text-sm text-blue-700">{t}</p>
-                      ))}
-                    </div>
-
-                    <p className="text-xs text-gray-400 text-center">
-                      You can skip this step and test again before your first session from the pre-call lobby.
-                    </p>
+                  )}
+                  <div className="absolute bottom-4 left-4 flex gap-2">
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md ${cameraOk ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white'}`}>
+                      {cameraOk ? '✓ Camera OK' : 'Camera pending'}
+                    </span>
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md ${micOk ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white'}`}>
+                      {micOk ? '✓ Mic OK' : 'Mic pending'}
+                    </span>
                   </div>
                 </div>
+
+                {!stream && (
+                  <button type="button" onClick={testDevices}
+                    className="w-full py-3 rounded-xl bg-gray-100 text-gray-900 font-semibold text-sm hover:bg-gray-200 transition-colors">
+                    Test Camera & Microphone
+                  </button>
+                )}
+                {stream && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
+                    <p className="text-sm font-semibold text-emerald-700">Looking good!</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">Your devices are working perfectly.</p>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* ── Step 3: All set ── */}
+            {/* Step 3: Done */}
             {step === 3 && (
-              <div className="grid lg:grid-cols-2 gap-6">
-                {/* Left: celebration */}
-                <div className="bg-gradient-to-br from-[#6c4ff5] to-indigo-600 rounded-2xl p-8 text-white flex flex-col justify-between min-h-[280px]">
-                  <div>
-                    <div className="text-5xl mb-4">🎉</div>
-                    <h2 className="text-2xl font-bold mb-2">Welcome aboard!</h2>
-                    <p className="text-purple-100 text-sm leading-relaxed">
-                      Your profile is complete. The admin will review your availability and assign your first group of 2 students. We&apos;ll notify you by email as soon as it&apos;s ready.
-                    </p>
-                  </div>
-                  <div className="mt-6">
-                    <div className="flex items-center gap-3 text-white/80 text-sm">
-                      <span className="text-xl">⭐</span>
-                      <p>Students rate sessions — build your reputation from day one!</p>
-                    </div>
-                  </div>
+              <div className="text-center py-6">
+                <div className="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center text-4xl mb-6">
+                  🎉
                 </div>
-
-                {/* Right: what's next */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-5">What happens next</p>
-                  <div className="space-y-5">
-                    {[
-                      { icon: '👥', title: 'Group assignment', desc: 'Admin matches you with 2 students based on your availability and their level.' },
-                      { icon: '📧', title: 'Email notification', desc: 'You\'ll get an email as soon as your group is confirmed.' },
-                      { icon: '📅', title: 'Sessions scheduled', desc: 'Sessions appear in your dashboard — typically starting the next Monday.' },
-                      { icon: '🎥', title: 'Join from dashboard', desc: 'Click "Start Class" from your dashboard when a session goes live.' },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-3.5">
-                        <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-lg flex-shrink-0">
-                          {item.icon}
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-900">{item.title}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{item.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">You're ready to teach!</h2>
+                <p className="text-gray-500 text-sm max-w-sm mx-auto leading-relaxed">
+                  Your profile is fully set up. Click finish to go to your dashboard, where you'll see your schedule and incoming groups.
+                </p>
               </div>
             )}
+          </div>
 
-            {/* Error */}
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">{error}</div>
-            )}
-
-            {/* Navigation */}
-            <div className="flex items-center gap-4 mt-8 pt-6 border-t border-gray-100">
-              {step > 0 && step < STEPS.length - 1 && (
-                <button type="button" onClick={() => setStep(s => s - 1)}
-                  className="px-6 py-3 rounded-xl border border-gray-200 text-gray-600 font-semibold text-sm hover:bg-gray-50 transition-colors">
-                  ← Back
-                </button>
-              )}
-              {step < STEPS.length - 1 && (
-                <button type="button" onClick={handleNext} disabled={!canAdvance()}
-                  className="px-10 py-3.5 rounded-xl bg-[#6c4ff5] text-white font-bold text-sm hover:bg-[#5c3de8] transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-purple-200">
-                  Continue →
-                </button>
-              )}
-              {step === STEPS.length - 1 && (
-                <button type="button" onClick={handleFinish} disabled={isPending}
-                  className="px-10 py-3.5 rounded-xl bg-[#6c4ff5] text-white font-bold text-sm hover:bg-[#5c3de8] transition-colors disabled:opacity-40 shadow-lg shadow-purple-200">
-                  {isPending ? 'Setting up your dashboard…' : 'Go to my dashboard →'}
-                </button>
-              )}
-
-              {/* Dot indicator on mobile */}
-              <div className="flex items-center gap-1.5 ml-auto lg:hidden">
-                {STEPS.map((_, i) => (
-                  <div key={i} className={`rounded-full transition-all ${
-                    i === step ? 'w-5 h-2 bg-[#6c4ff5]' : i < step ? 'w-2 h-2 bg-purple-300' : 'w-2 h-2 bg-gray-200'
-                  }`} />
-                ))}
-              </div>
+          {error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">
+              {error}
             </div>
-          </main>
+          )}
+
+          {/* Navigation */}
+          <div className="flex items-center gap-3 mt-6">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={() => setStep(s => s - 1)}
+                disabled={isPending}
+                className="px-5 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium text-sm hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                ← Back
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleNext}
+              disabled={!canAdvance() || isPending}
+              className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isPending ? 'Saving…' : step < 3 ? 'Continue →' : 'Go to Dashboard →'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

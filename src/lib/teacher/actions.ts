@@ -48,6 +48,14 @@ export async function submitApplication(
 
   if (error) return { error: error.message }
 
+  const cookieStore = await cookies()
+  cookieStore.set('x-teacher-app-submitted', 'true', {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 60 * 60 * 24 * 365,
+  })
+
   redirect('/teacher/pending')
 }
 
@@ -69,32 +77,32 @@ export async function saveTeacherOnboarding(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Update profile: timezone + availability
+  // Fetch the rich data from teacher_applications to carry into profiles
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: appData } = await (supabase as any)
+    .from('teacher_applications')
+    .select('languages_taught, certifications, teaching_bio, rate_expectation, intro_video_url')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  // Update profile with timezone, availability, and all teacher-specific data
   const { error: profileErr } = await supabase
     .from('profiles')
     .update({
       timezone: data.timezone,
       availability: data.availability as unknown as string[],
       onboarding_completed: true,
+      preferences: data.preferences,
+      languages_taught: appData?.languages_taught ?? [],
+      certifications: appData?.certifications ?? [],
+      intro_video_url: appData?.intro_video_url ?? null,
+      bio: appData?.teaching_bio ?? null,
+      rate_per_session: appData?.rate_expectation ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     .eq('id', user.id)
 
   if (profileErr) return { error: profileErr.message }
-
-  // Upsert teacher_profile preferences
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: tpErr } = await (supabase as any)
-    .from('teacher_profiles')
-    .upsert(
-      {
-        user_id: user.id,
-        preferences: data.preferences,
-      },
-      { onConflict: 'user_id' }
-    )
-
-  if (tpErr) return { error: tpErr.message }
 
   // Set cookie so proxy knows onboarding is done without DB hit
   const cookieStore = await cookies()
@@ -147,4 +155,23 @@ export async function approveTeacher(
   }
 
   return {}
+}
+
+export async function requestToTeachCourse(courseId: string): Promise<{ error?: string } | void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('course_teachers')
+    .insert({
+      course_id: courseId,
+      teacher_id: user.id,
+      status: 'pending'
+    })
+
+  if (error) {
+    if (error.code === '23505') return { error: 'Request already exists' }
+    return { error: error.message }
+  }
 }

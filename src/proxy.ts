@@ -35,7 +35,9 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   const publicPaths = ['/', '/login', '/register', '/admin/login']
-  const isPublic = publicPaths.includes(pathname) || pathname.startsWith('/api')
+  const isPublic = publicPaths.includes(pathname) || 
+                   pathname.startsWith('/api') || 
+                   pathname.startsWith('/teachers')
 
   if (!isAuthenticated) {
     if (!isPublic) {
@@ -70,46 +72,65 @@ export async function proxy(request: NextRequest) {
   }
 
   // Role-based route guards
-  if (pathname.startsWith('/student') && role !== 'student') {
+  if ((pathname === '/student' || pathname.startsWith('/student/')) && role !== 'student') {
     return NextResponse.redirect(new URL(roleDashboard(role), request.url))
   }
 
   // ── Teacher route guard ────────────────────────────────────────────────────
-  if (pathname.startsWith('/teacher')) {
+  if (pathname === '/teacher' || pathname.startsWith('/teacher/')) {
     if (role !== 'teacher') {
       return NextResponse.redirect(new URL(roleDashboard(role), request.url))
     }
 
-    // Free-pass routes — accessible regardless of approval / onboarding state
-    const freeRoutes = ['/teacher/application', '/teacher/pending']
-    if (freeRoutes.some(r => pathname.startsWith(r))) {
-      return supabaseResponse
-    }
-
+    const isAppSubmitted = request.cookies.get('x-teacher-app-submitted')?.value === 'true'
     const isApproved = request.cookies.get('x-teacher-approved')?.value === 'true'
     const isOnboarded = request.cookies.get('x-teacher-onboarded')?.value === 'true'
 
-    // If neither cookie is set, fetch state from DB once (same pattern as set-role)
-    if (!isApproved && !isOnboarded && !pathname.startsWith('/api/auth/set-teacher-state')) {
+    // If NO cookies are set, fetch state from DB once.
+    // Exclude /teacher/application itself — a new teacher with no cookies is always
+    // in the right place there, and the gating logic below handles it correctly.
+    if (
+      !isAppSubmitted && !isApproved && !isOnboarded &&
+      !pathname.startsWith('/api/auth/set-teacher-state') &&
+      pathname !== '/teacher/application'
+    ) {
       const stateUrl = new URL('/api/auth/set-teacher-state', request.url)
       stateUrl.searchParams.set('next', pathname)
       return NextResponse.redirect(stateUrl)
     }
 
-    // Not approved yet → hold at pending
-    if (!isApproved) {
-      return NextResponse.redirect(new URL('/teacher/pending', request.url))
+    // Gating Logic
+    if (!isAppSubmitted) {
+      if (pathname !== '/teacher/application') {
+        return NextResponse.redirect(new URL('/teacher/application', request.url))
+      }
+      return supabaseResponse
     }
 
-    // Approved but hasn't completed onboarding wizard
-    if (!isOnboarded && !pathname.startsWith('/teacher/onboarding')) {
-      return NextResponse.redirect(new URL('/teacher/onboarding', request.url))
+    if (!isApproved) {
+      if (pathname !== '/teacher/pending') {
+        return NextResponse.redirect(new URL('/teacher/pending', request.url))
+      }
+      return supabaseResponse
+    }
+
+    if (!isOnboarded) {
+      if (pathname !== '/teacher/onboarding') {
+        return NextResponse.redirect(new URL('/teacher/onboarding', request.url))
+      }
+      return supabaseResponse
+    }
+
+    // Fully onboarded: prevent going back to gated routes
+    const gatedRoutes = ['/teacher/application', '/teacher/pending', '/teacher/onboarding']
+    if (gatedRoutes.includes(pathname)) {
+      return NextResponse.redirect(new URL('/teacher/dashboard', request.url))
     }
 
     return supabaseResponse
   }
 
-  if (pathname.startsWith('/admin') && role !== 'admin') {
+  if ((pathname === '/admin' || pathname.startsWith('/admin/')) && role !== 'admin') {
     return NextResponse.redirect(new URL(roleDashboard(role), request.url))
   }
 

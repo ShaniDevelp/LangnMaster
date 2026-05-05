@@ -19,6 +19,14 @@ export type Database = {
           availability: string[] | null
           goals: string[] | null
           onboarding_completed: boolean | null
+          intro_video_url: string | null
+          years_experience: number | null
+          certifications: string[] | null
+          languages_taught: Json | null
+          rating: number | null
+          review_count: number | null
+          rate_per_session: number | null
+          preferences: Json | null
         }
         Insert: {
           id: string
@@ -35,6 +43,14 @@ export type Database = {
           availability?: string[] | null
           goals?: string[] | null
           onboarding_completed?: boolean | null
+          intro_video_url?: string | null
+          years_experience?: number | null
+          certifications?: string[] | null
+          languages_taught?: Json | null
+          rating?: number | null
+          review_count?: number | null
+          rate_per_session?: number | null
+          preferences?: Json | null
         }
         Update: {
           id?: string
@@ -51,6 +67,14 @@ export type Database = {
           availability?: string[] | null
           goals?: string[] | null
           onboarding_completed?: boolean | null
+          intro_video_url?: string | null
+          years_experience?: number | null
+          certifications?: string[] | null
+          languages_taught?: Json | null
+          rating?: number | null
+          review_count?: number | null
+          rate_per_session?: number | null
+          preferences?: Json | null
         }
       }
       courses: {
@@ -230,16 +254,6 @@ export type Database = {
 }
 
 // ── Stage 3 types (not in Database generic — tables added via migration) ──────
-export type TeacherProfile = {
-  user_id: string
-  intro_video_url: string | null
-  years_experience: number
-  certifications: string[]
-  languages_taught: string[]
-  rating: number
-  review_count: number
-  created_at: string
-}
 
 export type CourseModule = {
   id: string

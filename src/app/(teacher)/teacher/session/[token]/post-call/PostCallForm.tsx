@@ -6,10 +6,28 @@ import { savePostCall } from '@/lib/teacher/session-actions'
 type Student = { id: string; name: string }
 type AttendanceStatus = 'present' | 'late' | 'no_show'
 
-const ATTENDANCE_OPTIONS: { key: AttendanceStatus; label: string; icon: string; style: string }[] = [
-  { key: 'present',  label: 'Present',   icon: '✅', style: 'border-emerald-300 bg-emerald-50 text-emerald-700' },
-  { key: 'late',     label: 'Late',      icon: '🕐', style: 'border-amber-300 bg-amber-50 text-amber-700' },
-  { key: 'no_show',  label: 'No Show',  icon: '❌', style: 'border-red-200 bg-red-50 text-red-600' },
+const ATTENDANCE_OPTIONS: { key: AttendanceStatus; label: string; icon: string; style: string; activeStyle: string }[] = [
+  { 
+    key: 'present',  
+    label: 'Present',   
+    icon: '✓', 
+    style: 'bg-slate-50 text-slate-400 border-slate-100 hover:border-emerald-200 hover:text-emerald-500', 
+    activeStyle: 'bg-emerald-500 text-white border-emerald-500 shadow-lg shadow-emerald-500/20' 
+  },
+  { 
+    key: 'late',     
+    label: 'Late',      
+    icon: '!', 
+    style: 'bg-slate-50 text-slate-400 border-slate-100 hover:border-amber-200 hover:text-amber-500', 
+    activeStyle: 'bg-amber-500 text-white border-amber-500 shadow-lg shadow-amber-500/20' 
+  },
+  { 
+    key: 'no_show',  
+    label: 'Absent',    
+    icon: '×', 
+    style: 'bg-slate-50 text-slate-400 border-slate-100 hover:border-red-200 hover:text-red-500', 
+    activeStyle: 'bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/20' 
+  },
 ]
 
 type Props = {
@@ -23,6 +41,14 @@ type Props = {
   existingNotes: string
   existingHomeworkText: string
   existingHomeworkUrl: string
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <div className="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center text-white font-black text-sm uppercase shadow-lg shadow-indigo-500/10">
+      {name.charAt(0)}
+    </div>
+  )
 }
 
 export function PostCallForm(props: Props) {
@@ -58,206 +84,169 @@ export function PostCallForm(props: Props) {
   }
 
   const formattedDate = new Date(scheduledAt).toLocaleString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true,
   })
 
   const presentCount = Object.values(attendance).filter(v => v === 'present').length
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-[#6c4ff5]">LangMaster</span>
-            <span className="hidden sm:inline text-gray-300">·</span>
-            <span className="hidden sm:inline text-sm font-medium text-gray-600">Post-class Summary</span>
+    <div className="min-h-screen bg-[#f8fafc] font-sans">
+      {/* ── Premium Header ── */}
+      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-brand-500 rounded-xl flex items-center justify-center text-white font-black text-sm">LM</div>
+            <span className="text-slate-300 font-light text-xl">/</span>
+            <span className="text-slate-900 font-black text-sm uppercase tracking-widest">Recap</span>
           </div>
-          <Link href="/teacher/dashboard" className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
+          <Link href="/teacher/dashboard" className="text-xs font-black text-slate-400 hover:text-slate-900 uppercase tracking-widest transition-all">
             Skip for now
           </Link>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
-        {/* Page header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-xl">
-              🎉
-            </div>
+      <main className="max-w-6xl mx-auto px-6 py-12">
+        <div className="grid lg:grid-cols-[1fr_380px] gap-12">
+          
+          <div className="space-y-10">
+            {/* ── Page Intro ── */}
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Class complete!</h1>
-              <p className="text-sm text-gray-500">{courseName} · {formattedDate}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6 xl:gap-8">
-
-          {/* ── Left 2 cols: notes + homework ── */}
-          <div className="lg:col-span-2 space-y-5">
-
-            {/* Session notes */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2.5">
-                <span className="text-xl">📝</span>
-                <div>
-                  <h2 className="font-bold text-gray-900 text-sm">Session notes</h2>
-                  <p className="text-xs text-gray-400">Internal notes for your reference — not shown to students</p>
-                </div>
+              <div className="flex items-center gap-3 mb-3">
+                <span className="bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  Class Success
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="text-slate-400 font-bold text-sm">{formattedDate}</span>
               </div>
-              <div className="p-6">
-                <textarea
-                  value={sessionNotes}
-                  onChange={e => setSessionNotes(e.target.value)}
-                  rows={4}
-                  placeholder="What did you cover? Any observations about student progress, areas to revisit next time…"
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none transition"
-                />
-              </div>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">{courseName}</h1>
+              <p className="text-slate-500 font-medium mt-1">Finalize the session details to update student records.</p>
             </div>
 
-            {/* Homework */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2.5">
-                <span className="text-xl">📚</span>
-                <div>
-                  <h2 className="font-bold text-gray-900 text-sm">Homework for students</h2>
-                  <p className="text-xs text-gray-400">Students will see this in their sessions history</p>
-                </div>
+            {/* ── Internal Notes ── */}
+            <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-10 space-y-8">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Private Recap</h2>
+                <p className="text-slate-400 text-sm font-medium mt-1">Personal observations not visible to students.</p>
               </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Homework description</label>
-                  <textarea
-                    value={homeworkText}
-                    onChange={e => setHomeworkText(e.target.value)}
-                    rows={3}
-                    placeholder="e.g. Review pages 45–52 in the course book. Write 5 sentences using the past tense…"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none transition"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Resource link <span className="font-normal text-gray-400">(optional)</span>
-                  </label>
-                  <input
-                    type="url"
-                    value={homeworkUrl}
-                    onChange={e => setHomeworkUrl(e.target.value)}
-                    placeholder="https://… (worksheet, video, article)"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
-                  />
-                </div>
-              </div>
+              <textarea
+                value={sessionNotes}
+                onChange={e => setSessionNotes(e.target.value)}
+                rows={4}
+                placeholder="How did the lesson go? Any specific student feedback or areas to revisit?"
+                className="w-full bg-slate-50 border-none rounded-[2rem] px-8 py-6 text-slate-900 font-bold placeholder-slate-300 focus:ring-2 focus:ring-brand-500 transition-all resize-none"
+              />
             </div>
 
-            {/* Error */}
+            {/* ── Student Deliverables ── */}
+            <div className="bg-indigo-600 rounded-[3.5rem] p-10 text-white shadow-2xl shadow-indigo-600/20 space-y-8 relative overflow-hidden">
+              <div className="relative z-10 space-y-8">
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight">Student Action Items</h2>
+                  <p className="text-indigo-200 text-sm font-medium mt-1">This will be posted to the student&apos;s session history.</p>
+                </div>
+                
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-1">Homework Description</label>
+                    <textarea
+                      value={homeworkText}
+                      onChange={e => setHomeworkText(e.target.value)}
+                      rows={3}
+                      placeholder="e.g. Complete the exercise on page 42..."
+                      className="w-full bg-white/10 border border-white/10 rounded-[1.5rem] px-6 py-4 text-white font-bold placeholder-indigo-300/50 focus:ring-2 focus:ring-white transition-all resize-none"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-indigo-300 uppercase tracking-widest ml-1">Resource Link (Optional)</label>
+                    <input
+                      type="url"
+                      value={homeworkUrl}
+                      onChange={e => setHomeworkUrl(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full bg-white/10 border border-white/10 rounded-[1.5rem] px-6 py-4 text-white font-bold placeholder-indigo-300/50 focus:ring-2 focus:ring-white transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
+            </div>
+
             {error && (
-              <div className="bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl p-4">{error}</div>
+              <div className="bg-red-50 border border-red-100 text-red-600 font-bold rounded-2xl p-6 animate-shake">
+                ⚠️ {error}
+              </div>
             )}
           </div>
 
-          {/* ── Right 1 col: attendance + submit ── */}
-          <div className="space-y-5">
-            {/* Attendance */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">📋</span>
-                  <h2 className="font-bold text-gray-900 text-sm">Attendance</h2>
-                </div>
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
-                  {presentCount}/{students.length} present
+          {/* ── Sidebar ── */}
+          <div className="space-y-10">
+            {/* Attendance Card */}
+            <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/50">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="font-black text-slate-900 text-xs uppercase tracking-widest">Attendance Roll</h3>
+                <span className="bg-emerald-50 text-emerald-600 text-[10px] font-black px-2 py-1 rounded-lg uppercase tracking-wider">
+                  {presentCount}/{students.length} Present
                 </span>
               </div>
-
-              {students.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6">No students to mark</p>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {students.map(student => {
-                    const current = attendance[student.id] ?? 'present'
-                    return (
-                      <div key={student.id} className="px-5 py-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                            {student.name.charAt(0).toUpperCase()}
-                          </div>
-                          <p className="text-sm font-semibold text-gray-900">{student.name}</p>
-                        </div>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {ATTENDANCE_OPTIONS.map(opt => (
-                            <button
-                              key={opt.key}
-                              type="button"
-                              onClick={() => setStudentAttendance(student.id, opt.key)}
-                              className={`flex flex-col items-center gap-1 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${
-                                current === opt.key ? opt.style : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200'
-                              }`}
-                            >
-                              <span className="text-base">{opt.icon}</span>
-                              {opt.label}
-                            </button>
-                          ))}
-                        </div>
+              
+              <div className="space-y-8">
+                {students.map(student => {
+                  const current = attendance[student.id] ?? 'present'
+                  return (
+                    <div key={student.id} className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={student.name} />
+                        <p className="text-sm font-bold text-slate-900">{student.name}</p>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Submit */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3">
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={isPending}
-                className="w-full py-4 rounded-2xl bg-[#6c4ff5] text-white font-bold text-base hover:bg-[#5c3de8] transition-colors disabled:opacity-40 shadow-lg shadow-purple-200"
-              >
-                {isPending ? 'Saving…' : '✓ Save & finish'}
-              </button>
-              <Link
-                href="/teacher/dashboard"
-                className="block text-center text-sm text-gray-400 hover:text-gray-600 transition-colors py-1"
-              >
-                Skip — go to dashboard
-              </Link>
-              <p className="text-xs text-gray-400 text-center">
-                Session marked as complete. Students can see homework immediately.
-              </p>
-            </div>
-
-            {/* Quick summary */}
-            <div className="bg-purple-50 rounded-2xl p-5">
-              <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-3">Session summary</p>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-700">Students</span>
-                  <span className="font-semibold text-purple-900">{students.length}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-700">Present</span>
-                  <span className="font-semibold text-emerald-600">{presentCount}</span>
-                </div>
-                {students.length - presentCount > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-purple-700">Absent / Late</span>
-                    <span className="font-semibold text-red-500">{students.length - presentCount}</span>
-                  </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {ATTENDANCE_OPTIONS.map(opt => (
+                          <button
+                            key={opt.key}
+                            type="button"
+                            onClick={() => setStudentAttendance(student.id, opt.key)}
+                            className={`flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all active:scale-95 text-[10px] font-black uppercase tracking-widest ${
+                              current === opt.key ? opt.activeStyle : opt.style
+                            }`}
+                          >
+                            <span className="text-lg font-normal mb-0.5">{opt.icon}</span>
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {students.length === 0 && (
+                   <p className="text-center text-slate-400 text-xs font-medium py-4 italic">No students assigned to this group.</p>
                 )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-purple-700">Homework set</span>
-                  <span className="font-semibold text-purple-900">{homeworkText ? 'Yes' : 'No'}</span>
-                </div>
               </div>
             </div>
+
+            {/* Finalize Card */}
+            <div className="bg-white rounded-[3.5rem] p-10 border border-slate-100 shadow-2xl shadow-indigo-500/10 flex flex-col items-center text-center">
+               <div className="w-20 h-20 bg-emerald-50 rounded-[2.5rem] flex items-center justify-center text-3xl mb-8 shadow-xl shadow-emerald-500/10">
+                 🏁
+               </div>
+               <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Finish Summary</h3>
+               <p className="text-slate-400 text-sm font-medium leading-relaxed mb-10 px-4">
+                 Ready to close the session? Students will be notified and can view their homework.
+               </p>
+               <button
+                 onClick={handleSubmit}
+                 disabled={isPending}
+                 className="w-full py-6 bg-slate-900 hover:bg-slate-800 text-white font-black text-sm uppercase tracking-widest rounded-[2.5rem] shadow-2xl transition-all active:scale-95 disabled:opacity-30"
+               >
+                 {isPending ? 'Syncing...' : 'Save & Close Session'}
+               </button>
+               <Link href="/teacher/dashboard" className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-all">
+                  Return to Dashboard
+               </Link>
+            </div>
           </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

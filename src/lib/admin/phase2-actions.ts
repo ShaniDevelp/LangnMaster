@@ -98,10 +98,10 @@ export async function assignManualGroup(params: ManualGroupParams): Promise<{ er
 
 function getNextMonday(): string {
   const d = new Date()
-  const day = d.getDay()
+  const day = d.getUTCDay()
   const diff = day === 0 ? 1 : 8 - day
-  d.setDate(d.getDate() + diff)
-  d.setHours(0, 0, 0, 0)
+  d.setUTCDate(d.getUTCDate() + diff)
+  d.setUTCHours(0, 0, 0, 0)
   return d.toISOString().split('T')[0]
 }
 
@@ -111,18 +111,19 @@ const DAY_MAP: Record<string, number> = {
 
 function generatePreciseSessions(groupId: string, weekStart: string, slots: string[], durationWeeks: number) {
   const sessions = []
-  const start = new Date(weekStart) // e.g., Monday 00:00
+  // weekStart is "YYYY-MM-DD", which parses as midnight UTC
+  const start = new Date(weekStart) 
 
   for (let week = 0; week < durationWeeks; week++) {
     for (const slot of slots) {
-      // slot format: "Mon-09:00"
+      // slot format: "Mon-09:00" (These are UTC hours)
       const [dayStr, timeStr] = slot.split('-')
       const dayOffset = DAY_MAP[dayStr] ?? 0
       const [hours, minutes] = timeStr.split(':').map(Number)
 
       const d = new Date(start)
-      d.setDate(d.getDate() + week * 7 + dayOffset)
-      d.setHours(hours, minutes, 0, 0)
+      d.setUTCDate(d.getUTCDate() + week * 7 + dayOffset)
+      d.setUTCHours(hours, minutes, 0, 0)
       
       sessions.push({
         group_id: groupId,

@@ -8,14 +8,14 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/teacher/dashboard'
 
   const supabase = await createClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return NextResponse.redirect(new URL('/login', request.url))
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.redirect(new URL('/login', request.url))
 
   // Read onboarding_completed from profiles
   const { data: profile } = await supabase
     .from('profiles')
     .select('onboarding_completed')
-    .eq('id', session.user.id)
+    .eq('id', user.id)
     .single()
 
   const onboardingCompleted =
@@ -26,19 +26,23 @@ export async function GET(request: Request) {
   const { data: app } = await (supabase as any)
     .from('teacher_applications')
     .select('status')
-    .eq('user_id', session.user.id)
-    .single()
+    .eq('user_id', user.id)
+    .maybeSingle()
 
   const appStatus = (app as { status: string } | null)?.status ?? 'none'
   const isApproved = appStatus === 'approved'
+  const isPending = appStatus === 'pending' || appStatus === 'rejected'
 
   const COOKIE_OPTS = { httpOnly: true, sameSite: 'lax' as const, path: '/', maxAge: 60 * 60 * 24 * 7 }
 
   let redirectTo = next
-  if (!isApproved) redirectTo = '/teacher/pending'
+  if (appStatus === 'none') redirectTo = '/teacher/application'
+  else if (isPending) redirectTo = '/teacher/pending'
   else if (!onboardingCompleted) redirectTo = '/teacher/onboarding'
 
   const response = NextResponse.redirect(new URL(redirectTo, request.url))
+
+  if (appStatus !== 'none') response.cookies.set('x-teacher-app-submitted', 'true', COOKIE_OPTS)
   if (isApproved) response.cookies.set('x-teacher-approved', 'true', COOKIE_OPTS)
   if (onboardingCompleted) response.cookies.set('x-teacher-onboarded', 'true', COOKIE_OPTS)
 

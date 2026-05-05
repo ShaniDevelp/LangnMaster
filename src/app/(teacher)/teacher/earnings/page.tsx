@@ -15,9 +15,9 @@ export default async function EarningsPage() {
   // Get rate
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: tpRaw } = await (supabase as any)
-    .from('teacher_profiles')
+    .from('profiles')
     .select('rate_per_session')
-    .eq('user_id', user.id)
+    .eq('id', user.id)
     .single()
   const rate: number = (tpRaw as { rate_per_session?: number } | null)?.rate_per_session ?? 25
 

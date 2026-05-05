@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { saveOnboarding } from '@/lib/student/actions'
+import { AvailabilityPicker } from '@/components/AvailabilityPicker'
 
 const LANGUAGES = [
   'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
@@ -42,7 +43,6 @@ const TIMEZONES = [
 ]
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const SLOTS = ['Morning', 'Afternoon', 'Evening']
 
 const GOALS = [
   { key: 'travel', label: '✈️', desc: 'Travel' },
@@ -84,13 +84,6 @@ export default function OnboardingPage() {
 
   function setLevel(lang: string, level: string) {
     setLevels(prev => ({ ...prev, [lang]: level }))
-  }
-
-  function toggleSlot(day: string, slot: string) {
-    const key = `${day.toLowerCase()}-${slot.toLowerCase()}`
-    setAvailability(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    )
   }
 
   function toggleGoal(key: string) {
@@ -167,7 +160,7 @@ export default function OnboardingPage() {
                 timezone={timezone}
                 availability={availability}
                 onTimezone={setTimezone}
-                onToggleSlot={toggleSlot}
+                onAvailabilityChange={setAvailability}
               />
             )}
             {step === 3 && (
@@ -344,12 +337,12 @@ function Step3({
   timezone,
   availability,
   onTimezone,
-  onToggleSlot,
+  onAvailabilityChange,
 }: {
   timezone: string
   availability: string[]
   onTimezone: (tz: string) => void
-  onToggleSlot: (day: string, slot: string) => void
+  onAvailabilityChange: (slots: string[]) => void
 }) {
   return (
     <div className="space-y-6">
@@ -367,56 +360,30 @@ function Step3({
         </select>
       </div>
 
-      <div>
-        <label className="block text-sm font-semibold text-gray-700 mb-1">When are you free? <span className="text-gray-400 font-normal">(pick all that apply)</span></label>
-        <p className="text-xs text-gray-400 mb-3">Sessions are usually 60 min. Pick at least one slot.</p>
-        <div className="overflow-x-auto -mx-5 sm:mx-0 px-5 sm:px-0">
-          <table className="min-w-full">
-            <thead>
-              <tr>
-                <th className="w-20 sm:w-24" />
-                {DAYS.map(d => (
-                  <th key={d} className="pb-2 text-xs font-semibold text-gray-500 text-center min-w-[42px]">{d}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {SLOTS.map(slot => (
-                <tr key={slot}>
-                  <td className="pr-3 py-1.5 text-xs text-gray-500 font-medium whitespace-nowrap">{slot}</td>
-                  {DAYS.map(day => {
-                    const key = `${day.toLowerCase()}-${slot.toLowerCase()}`
-                    const active = availability.includes(key)
-                    return (
-                      <td key={day} className="py-1.5 px-0.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => onToggleSlot(day, slot)}
-                          className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg text-xs font-medium transition-all ${
-                            active
-                              ? 'bg-brand-500 text-white'
-                              : 'bg-gray-100 text-gray-400 hover:bg-purple-100 hover:text-brand-600'
-                          }`}
-                          aria-label={`${day} ${slot}`}
-                          aria-pressed={active}
-                        >
-                          {active ? '✓' : ''}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {timezone ? (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            When are you free? <span className="text-gray-400 font-normal">(pick all that apply)</span>
+          </label>
+          <p className="text-xs text-gray-400 mb-3">
+            Click a period to select all hours. Use ▼ to fine-tune specific hours.
+            Times shown in your timezone · stored in UTC.
+          </p>
+          <AvailabilityPicker
+            utcSlots={availability}
+            timezone={timezone}
+            onChange={onAvailabilityChange}
+          />
         </div>
-        <p className="text-xs text-gray-400 mt-3">
-          Morning = 6am–12pm · Afternoon = 12pm–6pm · Evening = 6pm–11pm (in your timezone)
-        </p>
-      </div>
+      ) : (
+        <div className="bg-gray-50 rounded-2xl p-5 text-center text-sm text-gray-400">
+          Select your timezone first to set availability.
+        </div>
+      )}
     </div>
   )
 }
+
 
 // ── Step 4 ──────────────────────────────────────────────────────────────────
 

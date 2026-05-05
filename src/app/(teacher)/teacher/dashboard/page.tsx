@@ -21,6 +21,8 @@ function isToday(iso: string) {
   return new Date(iso).toDateString() === new Date().toDateString()
 }
 
+import { MyCoursesClient } from './MyCoursesClient'
+
 export default async function TeacherDashboard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -66,6 +68,23 @@ export default async function TeacherDashboard() {
   const todayCount = upcoming.filter(s => isToday(s.scheduled_at)).length
   const nextSession = upcoming[0]
 
+  // Fetch available courses and the teacher's current request status
+  const { data: coursesRaw } = await supabase
+    .from('courses')
+    .select('*, course_teachers(teacher_id, status)')
+    .eq('is_active', true)
+    .eq('course_teachers.teacher_id', user.id)
+
+  const availableCourses = (coursesRaw ?? []).map(c => ({
+    id: c.id,
+    name: c.name,
+    language: c.language,
+    level: c.level,
+    sessions_per_week: c.sessions_per_week,
+    duration_weeks: c.duration_weeks,
+    status: (c.course_teachers as any)?.[0]?.status ?? 'none'
+  })) as any[]
+
   return (
     <div className="space-y-8">
       {/* ── Page header ── */}
@@ -78,22 +97,27 @@ export default async function TeacherDashboard() {
             Welcome back, {profile?.name?.split(' ')[0]} 👋
           </h1>
         </div>
-        <Link href="/teacher/groups"
-          className="self-start sm:self-auto text-sm font-semibold text-[#6c4ff5] bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl transition-colors">
-          View all groups →
-        </Link>
+        <div className="flex gap-3">
+          <Link href="/teacher/groups"
+            className="self-start sm:self-auto text-sm font-semibold text-[#6c4ff5] bg-purple-50 hover:bg-purple-100 px-4 py-2 rounded-xl transition-colors">
+            My Groups
+          </Link>
+        </div>
       </div>
 
       {/* ── Stat cards ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Active Groups',   value: String(groups.length),   icon: '👥', color: 'from-purple-500 to-indigo-500' },
-          { label: 'Total Students',  value: String(totalStudents),   icon: '🎓', color: 'from-blue-500 to-cyan-500' },
-          { label: 'Sessions Today',  value: String(todayCount),      icon: '📅', color: 'from-emerald-500 to-teal-500' },
-          { label: 'Upcoming',        value: String(upcoming.length), icon: '⏰', color: 'from-amber-500 to-orange-500' },
+          { label: 'Active Groups', value: String(groups.length), icon: '👥', color: 'from-purple-500 to-indigo-500' },
+          { label: 'Total Students', value: String(totalStudents), icon: '🎓', color: 'from-blue-500 to-cyan-500' },
+          { label: 'Sessions Today', value: String(todayCount), icon: '📅', color: 'from-emerald-500 to-teal-500', link: '/teacher/sessions' },
+          { label: 'Upcoming', value: String(upcoming.length), icon: '⏰', color: 'from-amber-500 to-orange-500', link: '/teacher/sessions' },
         ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
-            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center text-xl flex-shrink-0`}>
+          <div key={s.label} className="relative group bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center gap-4">
+            {s.link && (
+               <Link href={s.link} className="absolute inset-0 z-10" />
+            )}
+            <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${s.color} flex items-center justify-center text-xl flex-shrink-0 group-hover:scale-110 transition-transform`}>
               {s.icon}
             </div>
             <div>
@@ -125,9 +149,8 @@ export default async function TeacherDashboard() {
                   <p className="text-purple-300 text-xs mt-0.5 capitalize">{nextSession.groups?.courses?.language}</p>
                 </div>
                 <div className="flex-shrink-0">
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                    nextSession.status === 'active' ? 'bg-emerald-400 text-white' : 'bg-white/20 text-white'
-                  }`}>
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${nextSession.status === 'active' ? 'bg-emerald-400 text-white' : 'bg-white/20 text-white'
+                    }`}>
                     {nextSession.status}
                   </span>
                 </div>
@@ -155,15 +178,14 @@ export default async function TeacherDashboard() {
           {upcoming.length > 1 && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-50">
-                <p className="text-sm font-bold text-gray-700">Upcoming sessions</p>
+                <p className="text-sm font-bold text-gray-700">More sessions</p>
               </div>
               <div className="divide-y divide-gray-50">
                 {upcoming.slice(1).map(s => (
                   <div key={s.id} className="flex items-center justify-between px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        isToday(s.scheduled_at) ? 'bg-emerald-400' : 'bg-gray-200'
-                      }`} />
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isToday(s.scheduled_at) ? 'bg-emerald-400' : 'bg-gray-200'
+                        }`} />
                       <div>
                         <p className="text-sm font-medium text-gray-900">{s.groups?.courses?.name}</p>
                         <p className="text-xs text-gray-400">{formatDate(s.scheduled_at)}</p>
@@ -178,6 +200,13 @@ export default async function TeacherDashboard() {
               </div>
             </div>
           )}
+
+          <div className="text-center pt-2">
+            <Link href="/teacher/sessions" className="text-sm font-bold text-gray-400 hover:text-[#6c4ff5] transition-all flex items-center justify-center gap-2 group">
+              View your full schedule and history
+              <span className="group-hover:translate-x-1 transition-transform">→</span>
+            </Link>
+          </div>
         </div>
 
         {/* ── Right: groups + recent ── */}
@@ -244,6 +273,9 @@ export default async function TeacherDashboard() {
           )}
         </div>
       </div>
+
+      {/* ── My Course Requests (refactored to client component) ── */}
+      <MyCoursesClient courses={availableCourses.filter(c => c.status !== 'none')} currentUserId={user.id} />
     </div>
   )
 }

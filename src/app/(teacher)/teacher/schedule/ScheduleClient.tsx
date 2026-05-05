@@ -48,8 +48,11 @@ function fmtDate(d: Date) {
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
-function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10)
+function localDateStr(d: Date) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const date = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${date}`
 }
 
 export function ScheduleClient({ sessions, unavailDates, teacherTimezone }: Props) {
@@ -60,15 +63,15 @@ export function ScheduleClient({ sessions, unavailDates, teacherTimezone }: Prop
   anchor.setDate(anchor.getDate() + weekOffset * 7)
   const weekDates = getWeekDates(anchor)
 
-  // Group sessions by date
+  // Group sessions by local date
   const byDate = sessions.reduce<Record<string, SessionSlim[]>>((acc, s) => {
-    const d = new Date(s.scheduled_at).toISOString().slice(0, 10)
+    const d = localDateStr(new Date(s.scheduled_at))
     if (!acc[d]) acc[d] = []
     acc[d].push(s)
     return acc
   }, {})
 
-  const todayStr = isoDate(new Date())
+  const todayStr = localDateStr(new Date())
   const isCurrentWeek = weekOffset === 0
 
   // Month view helpers
@@ -130,7 +133,7 @@ export function ScheduleClient({ sessions, unavailDates, teacherTimezone }: Prop
           {/* Week header */}
           <div className="grid grid-cols-7 border-b border-gray-100">
             {weekDates.map((d, i) => {
-              const dateStr = isoDate(d)
+              const dateStr = localDateStr(d)
               const isToday = dateStr === todayStr
               const isUnavail = unavailDates.includes(dateStr)
               return (
@@ -150,7 +153,7 @@ export function ScheduleClient({ sessions, unavailDates, teacherTimezone }: Prop
           {/* Session blocks per day */}
           <div className="grid grid-cols-7 min-h-[320px]">
             {weekDates.map((d, i) => {
-              const dateStr = isoDate(d)
+              const dateStr = localDateStr(d)
               const daySessions = byDate[dateStr] ?? []
               const isUnavail = unavailDates.includes(dateStr)
 
@@ -194,7 +197,7 @@ export function ScheduleClient({ sessions, unavailDates, teacherTimezone }: Prop
           <div className="grid grid-cols-7">
             {monthDays.map((d, i) => {
               if (!d) return <div key={i} className="border-r border-b border-gray-50 min-h-[80px]" />
-              const dateStr = isoDate(d)
+              const dateStr = localDateStr(d)
               const daySessions = byDate[dateStr] ?? []
               const isToday = dateStr === todayStr
               const isUnavail = unavailDates.includes(dateStr)

@@ -24,10 +24,10 @@ type LobbyProps = {
 }
 
 function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
-  const sz = size === 'sm' ? 'w-7 h-7 text-xs' : size === 'lg' ? 'w-12 h-12 text-base' : 'w-9 h-9 text-sm'
+  const sz = size === 'sm' ? 'w-7 h-7 text-xs' : size === 'lg' ? 'w-16 h-16 text-xl' : 'w-10 h-10 text-sm'
   return (
-    <div className={`${sz} rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white font-bold flex-shrink-0`}>
-      {name.charAt(0).toUpperCase()}
+    <div className={`${sz} rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black flex-shrink-0 shadow-lg shadow-indigo-500/20 uppercase`}>
+      {name.charAt(0)}
     </div>
   )
 }
@@ -71,14 +71,13 @@ export function TeacherLobby(props: LobbyProps) {
   function handleSaveNotes() {
     startSave(async () => {
       const res = await savePreCallNotes(sessionId, { topic, prep_notes: prepNotes })
-      setSaveMsg(res.error ? `Error: ${res.error}` : 'Saved ✓')
-      setTimeout(() => setSaveMsg(null), 2000)
+      setSaveMsg(res.error ? `Error: ${res.error}` : 'Changes saved ✓')
+      setTimeout(() => setSaveMsg(null), 3000)
     })
   }
 
   function handleStartClass() {
     startStart(async () => {
-      // Stop preview stream before entering call (VideoCallRoom will re-acquire)
       stream?.getTracks().forEach(t => t.stop())
       setStream(null)
       setInCall(true)
@@ -86,7 +85,7 @@ export function TeacherLobby(props: LobbyProps) {
   }
 
   const formattedTime = new Date(scheduledAt).toLocaleString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
+    weekday: 'short', month: 'short', day: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true,
   })
 
@@ -107,219 +106,182 @@ export function TeacherLobby(props: LobbyProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-[#6c4ff5]">LangMaster</span>
-            <span className="hidden sm:inline text-gray-300">·</span>
-            <span className="hidden sm:inline text-sm font-medium text-gray-600">Pre-class Lobby</span>
+    <div className="min-h-screen bg-[#f8fafc]">
+      {/* ── Minimal Premium Header ── */}
+      <header className="sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-slate-100">
+        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 bg-brand-500 rounded-xl flex items-center justify-center text-white font-black text-sm">LM</div>
+            <span className="text-slate-300 font-light text-xl">/</span>
+            <span className="text-slate-900 font-black text-sm uppercase tracking-widest">Lobby</span>
           </div>
-          {isLive && (
-            <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Session time!
-            </span>
-          )}
+          <div className="flex items-center gap-3">
+             <div className="text-right hidden sm:block">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Teacher</p>
+                <p className="text-sm font-bold text-slate-900 leading-none">{userName}</p>
+             </div>
+             <Avatar name={userName} size="sm" />
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
-        <div className="grid lg:grid-cols-3 gap-6 xl:gap-8">
-
-          {/* ── Left (2 cols): prep + notes ── */}
-          <div className="lg:col-span-2 space-y-5">
-            {/* Session info banner */}
-            <div className="bg-gradient-to-r from-[#6c4ff5] to-indigo-600 rounded-2xl p-6 text-white">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                  <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider mb-1">Upcoming class</p>
-                  <h1 className="text-xl font-bold">{courseName}</h1>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    <span className="text-xs bg-white/20 text-white px-2.5 py-0.5 rounded-full">{language}</span>
-                    <span className="text-xs bg-white/20 text-white px-2.5 py-0.5 rounded-full capitalize">{level}</span>
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-purple-200 text-xs">Scheduled for</p>
-                  <p className="text-white font-semibold text-sm mt-0.5">{formattedTime}</p>
-                </div>
+      <main className="max-w-6xl mx-auto px-6 py-10">
+        <div className="grid lg:grid-cols-[1fr_380px] gap-10">
+          
+          <div className="space-y-10">
+            {/* ── Title & Status ── */}
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                  isLive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'
+                }`}>
+                  {isLive ? 'Live Session' : 'Scheduled'}
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="text-slate-500 font-bold text-sm">{formattedTime}</span>
               </div>
+              <h1 className="text-4xl font-black text-slate-900 tracking-tight">{courseName}</h1>
+              <p className="text-slate-500 font-medium mt-1 uppercase tracking-widest text-xs">{language} · {level}</p>
             </div>
 
-            {/* Topic + prep */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl">📝</span>
-                  <div>
-                    <h2 className="font-bold text-gray-900 text-sm">Session prep</h2>
-                    <p className="text-xs text-gray-400">Set a topic and notes visible only to you</p>
+            {/* ── Camera Preview ── */}
+            <div className="relative group rounded-[3rem] overflow-hidden bg-slate-900 shadow-2xl shadow-indigo-500/10 border border-white/5 aspect-video flex items-center justify-center">
+              {stream ? (
+                <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+              ) : (
+                <div className="text-center">
+                  <div className="w-20 h-20 bg-white/5 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4 border border-white/10 group-hover:scale-110 transition-transform duration-500">
+                    📷
                   </div>
+                  <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Preview Camera</p>
+                  <button onClick={testDevices} className="mt-6 px-8 py-3 bg-white text-slate-900 font-black text-xs uppercase tracking-widest rounded-2xl hover:bg-slate-100 transition-all active:scale-95 shadow-xl">
+                    Test Camera & Mic
+                  </button>
+                </div>
+              )}
+              
+              {stream && (
+                <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between">
+                   <div className="flex items-center gap-3 bg-black/40 backdrop-blur-xl px-4 py-2 rounded-2xl border border-white/10">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-white font-black text-[10px] uppercase tracking-widest">System Ready</span>
+                   </div>
+                   <button onClick={() => { stream.getTracks().forEach(t => t.stop()); setStream(null); setCamOk(false); setMicOk(false) }} 
+                     className="bg-red-500/20 hover:bg-red-500/30 text-red-100 px-4 py-2 rounded-2xl backdrop-blur-xl border border-red-500/20 text-[10px] font-black uppercase tracking-widest transition-all">
+                      Off
+                   </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Session Prep ── */}
+            <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-10 space-y-8">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight">Lesson Strategy</h2>
+                  <p className="text-slate-400 text-sm font-medium mt-1">Set the roadmap for today&apos;s conversation.</p>
                 </div>
                 <button
-                  type="button"
                   onClick={handleSaveNotes}
                   disabled={saving}
-                  className="text-xs font-semibold text-[#6c4ff5] bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-600 font-black text-[10px] uppercase tracking-widest rounded-xl transition-all disabled:opacity-50"
                 >
-                  {saving ? 'Saving…' : saveMsg ?? 'Save draft'}
+                  {saving ? 'Syncing...' : saveMsg ?? 'Save Strategy'}
                 </button>
               </div>
-              <div className="p-6 space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Today&apos;s topic</label>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Main Topic</label>
                   <input
                     type="text"
                     value={topic}
                     onChange={e => setTopic(e.target.value)}
-                    placeholder="e.g. Past tense conjugation, travel vocabulary…"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent transition"
+                    placeholder="e.g. Discussing future plans, Travel vocabulary..."
+                    className="w-full bg-slate-50 border-none rounded-[1.5rem] px-6 py-4 text-slate-900 font-bold placeholder-slate-300 focus:ring-2 focus:ring-brand-500 transition-all"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Prep notes</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Key Objectives & Exercises</label>
                   <textarea
                     value={prepNotes}
                     onChange={e => setPrepNotes(e.target.value)}
                     rows={4}
-                    placeholder="Exercises to cover, vocab lists, things to check from last session…"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent resize-none transition"
+                    placeholder="List specific vocab or grammar focus points here..."
+                    className="w-full bg-slate-50 border-none rounded-[1.5rem] px-6 py-4 text-slate-900 font-bold placeholder-slate-300 focus:ring-2 focus:ring-brand-500 transition-all resize-none"
                   />
                 </div>
               </div>
             </div>
-
-            {/* Device check */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-50 flex items-center gap-2.5">
-                <span className="text-xl">📹</span>
-                <div>
-                  <h2 className="font-bold text-gray-900 text-sm">Device check</h2>
-                  <p className="text-xs text-gray-400">Verify camera & mic before starting</p>
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="grid sm:grid-cols-2 gap-4">
-                  <div className="bg-gray-900 rounded-xl overflow-hidden aspect-video flex items-center justify-center">
-                    {stream ? (
-                      <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center text-gray-500">
-                        <p className="text-3xl mb-2">📷</p>
-                        <p className="text-xs">Preview here</p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col justify-between gap-4">
-                    <div className="space-y-3">
-                      <div className={`flex items-center gap-3 p-3 rounded-xl border-2 ${camOk ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100'}`}>
-                        <span className="text-xl">{camOk ? '✅' : '📷'}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700">Camera</p>
-                          <p className={`text-xs ${camOk ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>{camOk ? 'Working' : 'Not tested'}</p>
-                        </div>
-                      </div>
-                      <div className={`flex items-center gap-3 p-3 rounded-xl border-2 ${micOk ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100'}`}>
-                        <span className="text-xl">{micOk ? '✅' : '🎤'}</span>
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700">Microphone</p>
-                          <p className={`text-xs ${micOk ? 'text-emerald-600 font-medium' : 'text-gray-400'}`}>{micOk ? 'Working' : 'Not tested'}</p>
-                        </div>
-                      </div>
-                    </div>
-                    {!stream ? (
-                      <button type="button" onClick={testDevices}
-                        className="w-full py-3 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200 transition-colors">
-                        Test devices
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => { stream.getTracks().forEach(t => t.stop()); setStream(null); setCamOk(false); setMicOk(false) }}
-                        className="w-full py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm hover:bg-gray-50 transition-colors">
-                        Stop preview
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
 
-          {/* ── Right (1 col): students + start ── */}
-          <div className="space-y-5">
-            {/* Start class CTA */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-              <div className={`w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-3xl ${
-                isLive ? 'bg-emerald-50' : 'bg-gray-50'
-              }`}>
-                {isLive ? '🟢' : '⏳'}
+          {/* ── Sidebar ── */}
+          <div className="space-y-8">
+            {/* Start Session Card */}
+            <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-2xl shadow-indigo-500/10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-brand-50 rounded-[2.5rem] flex items-center justify-center text-3xl mb-6">
+                {isLive ? '🚀' : '⏳'}
               </div>
-              <h2 className="font-bold text-gray-900 text-base mb-1">
-                {isLive ? 'Ready to start!' : 'Not yet time'}
-              </h2>
-              <p className="text-sm text-gray-500 mb-5">
-                {isLive
-                  ? 'Your session time has arrived. Students are waiting.'
-                  : `Session starts at ${new Date(scheduledAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`}
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                {isLive ? 'Ready to Go?' : 'Class Window'}
+              </h3>
+              <p className="text-slate-400 text-sm font-medium mt-2 leading-relaxed mb-8 px-4">
+                {isLive 
+                  ? 'The classroom is open. Enter whenever you&apos;re prepared.' 
+                  : `This session starts soon. You can enter early to prep.`}
               </p>
               <button
-                type="button"
                 onClick={handleStartClass}
                 disabled={starting}
-                className={`w-full py-4 rounded-2xl font-bold text-base transition-all shadow-lg ${
-                  isLive
-                    ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-200'
-                    : 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8] shadow-purple-200'
-                } disabled:opacity-50`}
+                className="w-full py-5 bg-brand-500 hover:bg-brand-600 text-white font-black text-sm uppercase tracking-widest rounded-[2rem] shadow-xl shadow-brand-500/20 transition-all active:scale-95 disabled:opacity-50"
               >
-                {starting ? 'Starting…' : isLive ? '▶ Start Class' : '▶ Enter Early'}
+                {starting ? 'Initializing...' : 'Launch Classroom'}
               </button>
-              <p className="text-xs text-gray-400 mt-3">Students join from their session link.</p>
             </div>
 
-            {/* Student list */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-50">
-                <h2 className="font-bold text-gray-900 text-sm">
-                  Students
-                  <span className="ml-2 text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                    {students.length}
-                  </span>
-                </h2>
+            {/* Students List */}
+            <div className="bg-white rounded-[3rem] p-8 border border-slate-100 shadow-xl shadow-slate-200/50">
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="font-black text-slate-900 text-xs uppercase tracking-widest">Enrolled Students</h3>
+                <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-1 rounded-lg">
+                  {students.length}
+                </span>
               </div>
-              <div className="divide-y divide-gray-50">
-                {students.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-6">No students assigned yet</p>
-                ) : students.map(s => (
-                  <div key={s.id} className="flex items-center gap-3 px-5 py-3.5">
+              <div className="space-y-4">
+                {students.map(s => (
+                  <div key={s.id} className="flex items-center gap-4 group cursor-default">
                     <Avatar name={s.name} />
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{s.name}</p>
-                      <p className="text-xs text-gray-400">Student</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 truncate group-hover:text-brand-500 transition-colors">{s.name}</p>
+                      <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Student</p>
                     </div>
+                    <div className="w-2 h-2 rounded-full bg-slate-100 group-hover:bg-emerald-500 transition-colors" />
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Tips */}
-            <div className="bg-purple-50 rounded-2xl p-5">
-              <p className="text-xs font-bold text-purple-600 uppercase tracking-wider mb-3">Before you start</p>
-              <ul className="space-y-2">
+            {/* Quick Tips */}
+            <div className="bg-indigo-600 rounded-[3rem] p-8 text-white shadow-2xl shadow-indigo-600/20">
+              <h4 className="font-black text-[10px] uppercase tracking-[0.2em] opacity-60 mb-6">Expert Checklist</h4>
+              <ul className="space-y-4">
                 {[
-                  '✅ Set today\'s topic above',
-                  '✅ Check camera & mic',
-                  '✅ Close unnecessary tabs',
-                  '✅ Stable internet connection',
+                  'Ensure stable high-speed WiFi',
+                  'Silence your phone & notifications',
+                  'Check lighting & camera angle',
+                  'Keep drinking water nearby'
                 ].map((tip, i) => (
-                  <li key={i} className="text-sm text-purple-700">{tip}</li>
+                  <li key={i} className="flex items-start gap-3 text-sm font-bold leading-tight">
+                    <span className="text-indigo-300 mt-0.5">✓</span>
+                    {tip}
+                  </li>
                 ))}
               </ul>
             </div>
           </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

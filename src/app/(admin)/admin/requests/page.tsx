@@ -18,6 +18,12 @@ export default async function AdminRequestsPage() {
     .select('*, profiles:teacher_id(name, avatar_url), groups(courses(name))')
     .order('created_at', { ascending: false })
 
+  // Fetch Teacher Course Requests
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: courseRequestsRaw } = await (supabase as any)
+    .from('course_teachers')
+    .select('id, course_id, teacher_id, status, profiles!course_teachers_teacher_id_fkey(name, avatar_url), courses(name, language)')
+
   const payouts = (payoutsRaw ?? []) as {
     id: string
     teacher_id: string
@@ -41,5 +47,14 @@ export default async function AdminRequestsPage() {
     groups?: { courses?: { name?: string } }
   }[]
 
-  return <RequestsClient payouts={payouts} groupActions={groupActions} />
+  const courseRequests = (courseRequestsRaw ?? []) as {
+    id: string
+    course_id: string
+    teacher_id: string
+    status: 'pending' | 'approved' | 'rejected'
+    profiles?: { name?: string; avatar_url?: string | null }
+    courses?: { name?: string; language?: string }
+  }[]
+
+  return <RequestsClient payouts={payouts} groupActions={groupActions} courseRequests={courseRequests} />
 }
