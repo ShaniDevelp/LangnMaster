@@ -145,7 +145,7 @@ export default function TeacherApplicationPage() {
               {step === 3 && 'About you'}
             </h1>
             <p className="text-gray-500 text-sm sm:text-base mt-1">
-              {step === 0 && 'Select each language and your proficiency level'}
+              {step === 0 && 'Select the language you teach and your proficiency level'}
               {step === 1 && 'Optional, but helps show your qualifications to students'}
               {step === 2 && 'When can you teach? Admin schedules groups around these slots'}
               {step === 3 && 'Students will see your bio and video'}
@@ -157,19 +157,29 @@ export default function TeacherApplicationPage() {
             {/* Step 0: Languages */}
             {step === 0 && (
               <div className="space-y-6">
+                <p className="text-xs text-gray-400 -mt-2">Currently only English is available for teaching.</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {LANGUAGES.map(lang => {
-                    const sel = languagesTaught.find(l => l.lang === lang)
+                  {/* English — active */}
+                  {(() => {
+                    const sel = languagesTaught.find(l => l.lang === 'English')
                     return (
-                      <button key={lang} type="button" onClick={() => toggleLanguage(lang)}
+                      <button type="button" onClick={() => toggleLanguage('English')}
                         className={`px-3 py-2.5 rounded-xl text-sm font-medium border-2 transition-all text-left ${
                           sel ? 'bg-brand-500 text-white border-brand-500'
                               : 'bg-white text-gray-700 border-gray-100 hover:border-brand-300 hover:text-brand-500'
                         }`}>
-                        {sel && '✓ '}{lang}
+                        {sel && '✓ '}English
                       </button>
                     )
-                  })}
+                  })()}
+                  {/* Others — disabled */}
+                  {LANGUAGES.filter(l => l !== 'English').slice(0, 5).map(lang => (
+                    <button key={lang} type="button" disabled
+                      className="px-3 py-2.5 rounded-xl text-sm font-medium border-2 bg-gray-50/50 text-gray-400 border-gray-100 cursor-not-allowed text-left">
+                      <span>{lang}</span>
+                      <span className="text-[10px] block font-normal text-gray-400 mt-0.5">will come in future</span>
+                    </button>
+                  ))}
                 </div>
 
                 {languagesTaught.length > 0 && (

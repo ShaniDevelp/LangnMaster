@@ -6,7 +6,7 @@ import { AvailabilityPicker } from '@/components/AvailabilityPicker'
 
 const LANGUAGES = [
   'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
-  'Mandarin', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Russian',
+  'Mandarin', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Urdu', 'Russian',
   'Dutch', 'Polish', 'Turkish', 'Vietnamese', 'Thai', 'Swahili',
 ]
 
@@ -134,7 +134,7 @@ export default function OnboardingPage() {
             <p className="text-xs sm:text-sm font-semibold text-brand-500 uppercase tracking-wider mb-1">
               Step {step + 1} — {STEP_TITLES[step]}
             </p>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{stepHeading(step)}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{stepHeading(step, targetLangs)}</h1>
             <p className="text-gray-500 text-sm sm:text-base mt-1">{stepSub(step)}</p>
           </div>
 
@@ -216,7 +216,11 @@ export default function OnboardingPage() {
   )
 }
 
-function stepHeading(step: number) {
+function stepHeading(step: number, targetLangs: string[]) {
+  if (step === 1 && targetLangs.length > 0) {
+    if (targetLangs.length === 1) return `How well do you know ${targetLangs[0]}?`
+    return `How well do you know ${targetLangs.slice(0, -1).join(', ')} & ${targetLangs.slice(-1)}?`
+  }
   return [
     'What languages are you working with?',
     'How well do you know each language?',
@@ -247,6 +251,8 @@ function Step1({
   onNative: (l: string) => void
   onToggleTarget: (l: string) => void
 }) {
+  const [isOtherNative, setIsOtherNative] = useState(!!nativeLang && !LANGUAGES.includes(nativeLang))
+
   return (
     <div className="space-y-6">
       <div>
@@ -256,9 +262,12 @@ function Step1({
             <button
               key={l}
               type="button"
-              onClick={() => onNative(l)}
+              onClick={() => {
+                onNative(l)
+                setIsOtherNative(false)
+              }}
               className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all text-left ${
-                nativeLang === l
+                nativeLang === l && !isOtherNative
                   ? 'bg-brand-500 text-white border-brand-500'
                   : 'bg-white text-gray-700 border-gray-200 hover:border-brand-300 hover:text-brand-600'
               }`}
@@ -266,14 +275,42 @@ function Step1({
               {l}
             </button>
           ))}
+          <button
+            type="button"
+            onClick={() => {
+              setIsOtherNative(true)
+              if (LANGUAGES.includes(nativeLang)) onNative('')
+            }}
+            className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all text-left ${
+              isOtherNative
+                ? 'bg-brand-500 text-white border-brand-500'
+                : 'bg-white text-gray-700 border-gray-200 hover:border-brand-300 hover:text-brand-600'
+            }`}
+          >
+            Other...
+          </button>
         </div>
+
+        {isOtherNative && (
+          <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-300">
+            <input
+              type="text"
+              autoFocus
+              placeholder="Enter your native language..."
+              value={LANGUAGES.includes(nativeLang) ? '' : nativeLang}
+              onChange={(e) => onNative(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl text-sm font-medium border border-brand-200 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all bg-brand-50/30"
+            />
+          </div>
+        )}
       </div>
 
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-1">I want to learn <span className="text-gray-400 font-normal">(pick one or more)</span></label>
-        <p className="text-xs text-gray-400 mb-3">Cannot be same as your native language.</p>
+        <p className="text-xs text-gray-400 mb-3">Currently only English is available for enrollment.</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {LANGUAGES.filter(l => l !== nativeLang).map(l => (
+          {/* Active: English */}
+          {LANGUAGES.filter(l => l === 'English' && l !== nativeLang).map(l => (
             <button
               key={l}
               type="button"
@@ -285,6 +322,21 @@ function Step1({
               }`}
             >
               {targetLangs.includes(l) ? '✓ ' : ''}{l}
+            </button>
+          ))}
+
+          {/* 5 more disabled options */}
+          {LANGUAGES.filter(l => l !== 'English' && l !== nativeLang).slice(0, 5).map(l => (
+            <button
+              key={l}
+              type="button"
+              disabled
+              className="px-3 py-2.5 rounded-xl text-sm font-medium border bg-gray-50/50 text-gray-400 border-gray-100 cursor-not-allowed text-left"
+            >
+              <div>
+                <span>{l}</span>
+                <span className="text-[10px] block font-normal text-gray-400 mt-0.5">will come in future</span>
+              </div>
             </button>
           ))}
         </div>

@@ -22,24 +22,19 @@ type TeacherWithApplication = {
   teacher_applications: ApplicationRow | null
 }
 
-function ApproveRejectButtons({ teacher }: { teacher: TeacherWithApplication }) {
+function ApproveRejectButtons({
+  teacher,
+  onStatusChange,
+}: {
+  teacher: TeacherWithApplication
+  onStatusChange: (teacherId: string, newStatus: 'approved' | 'rejected') => void
+}) {
   const [notes, setNotes] = useState('')
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [done, setDone] = useState<'approved' | 'rejected' | null>(null)
 
   const appStatus = teacher.teacher_applications?.status
   const hasNoApplication = !teacher.teacher_applications
-
-  if (done) {
-    return (
-      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-        done === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
-      }`}>
-        {done === 'approved' ? '✓ Approved' : '✗ Rejected'}
-      </span>
-    )
-  }
 
   if (appStatus === 'approved') {
     return <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full">✓ Approved</span>
@@ -55,8 +50,8 @@ function ApproveRejectButtons({ teacher }: { teacher: TeacherWithApplication }) 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ teacherId: teacher.id, action, adminNotes: notes, noApplication: hasNoApplication }),
       })
-      setDone(action === 'approve' ? 'approved' : 'rejected')
       setOpen(false)
+      onStatusChange(teacher.id, action === 'approve' ? 'approved' : 'rejected')
     })
   }
 
@@ -185,7 +180,21 @@ function ApplicationDetail({ app }: { app: ApplicationRow }) {
   )
 }
 
-export function TeachersClient({ teachers }: { teachers: TeacherWithApplication[] }) {
+export function TeachersClient({ teachers: initialTeachers }: { teachers: TeacherWithApplication[] }) {
+  const [teachers, setTeachers] = useState<TeacherWithApplication[]>(initialTeachers)
+
+  function handleStatusChange(teacherId: string, newStatus: 'approved' | 'rejected') {
+    setTeachers(prev => prev.map(t => {
+      if (t.id !== teacherId) return t
+      return {
+        ...t,
+        teacher_applications: t.teacher_applications
+          ? { ...t.teacher_applications, status: newStatus }
+          : null,
+      }
+    }))
+  }
+
   function timeAgo(iso: string) {
     const diff = Date.now() - new Date(iso).getTime()
     const d = Math.floor(diff / 86400000)
@@ -233,7 +242,7 @@ export function TeachersClient({ teachers }: { teachers: TeacherWithApplication[
                       </p>
                     </div>
                   </div>
-                  <ApproveRejectButtons teacher={t} />
+                  <ApproveRejectButtons teacher={t} onStatusChange={handleStatusChange} />
                 </div>
                 {t.teacher_applications && (
                   <div className="mt-3">
@@ -280,7 +289,7 @@ export function TeachersClient({ teachers }: { teachers: TeacherWithApplication[
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <ApproveRejectButtons teacher={t} />
+                      <ApproveRejectButtons teacher={t} onStatusChange={handleStatusChange} />
                       {appStatus === 'pending' || !appStatus ? null : (
                         t.teacher_applications && (
                           <div className="mt-1">

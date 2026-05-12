@@ -115,18 +115,27 @@ export default async function TeacherLayout({
     )
   }
 
-  // Fully unlocked: fetch notification count + render full sidebar
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { count: unreadCount } = await (supabase as any)
-    .from('notifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .is('read_at', null)
+  // Fully unlocked: fetch notification count + pending group proposals + render full sidebar
+  const [{ count: unreadCount }, { count: proposalCountRaw }] = await Promise.all([
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .is('read_at', null),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('teacher_id', user.id)
+      .eq('acceptance_status', 'pending_teacher'),
+  ])
 
   const unread: number = unreadCount ?? 0
+  const proposalCount: number = proposalCountRaw ?? 0
 
   return (
-    <TeacherLayoutClient profile={profile!} unread={unread}>
+    <TeacherLayoutClient profile={profile!} unread={unread} proposalCount={proposalCount}>
       {children}
     </TeacherLayoutClient>
   )

@@ -36,6 +36,7 @@ export default async function TeacherDashboard() {
     .select('*, courses(name, language, level, sessions_per_week, duration_weeks), group_members(*, profiles:user_id(id, name, avatar_url))')
     .eq('teacher_id', user.id)
     .eq('status', 'active')
+    .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
 
   const groups = (groupsRaw ?? []) as unknown as GroupRow[]
   const groupIds = groups.map(g => g.id)

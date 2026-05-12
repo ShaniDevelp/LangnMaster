@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { Course, Enrollment, Session, Group, Profile } from '@/lib/supabase/types'
+import { activePeriodsLocal, DAYS as AVAIL_DAYS, PERIOD_LABEL } from '@/lib/availability'
+import { MessageButton } from '@/components/MessageButton'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,14 +104,24 @@ function greeting_word() {
   return 'Good evening'
 }
 
-function slotsFromAvailability(availability: string[] | null): { day: string; slot: string }[] {
+function slotsFromAvailability(availability: string[] | null, timezone: string | null): { day: string; slot: string }[] {
   if (!availability?.length) return []
-  return availability
-    .map(k => {
-      const [day, slot] = k.split('-')
-      return { day: DAY_LABELS[day] ?? day, slot: SLOT_LABELS[slot] ?? slot }
-    })
-    .slice(0, 6)
+  const tzone = timezone || 'UTC'
+  const activeSet = activePeriodsLocal(availability, tzone)
+  const results: { day: string; slot: string }[] = []
+
+  // Iterate in DAYS order to keep it sorted
+  for (const day of AVAIL_DAYS) {
+    for (const period of ['morning', 'afternoon', 'evening'] as const) {
+      if (activeSet.has(`${day}-${period}`)) {
+        results.push({
+          day: day,
+          slot: PERIOD_LABEL[period].split('  ')[1] || PERIOD_LABEL[period]
+        })
+      }
+    }
+  }
+  return results
 }
 
 function currentWeekNumber(weekStart: string): number {
@@ -141,7 +153,13 @@ export default async function StudentDashboard() {
 
   const { data: memberGroupsRaw } = await supabase
     .from('group_members').select('group_id').eq('user_id', user.id)
-  const groupIds = ((memberGroupsRaw ?? []) as { group_id: string }[]).map(m => m.group_id)
+  const allGroupIds = ((memberGroupsRaw ?? []) as { group_id: string }[]).map(m => m.group_id)
+
+  // Exclude groups still pending teacher acceptance — student shouldn't see them yet
+  const { data: acceptedGroupsRaw } = allGroupIds.length > 0
+    ? await supabase.from('groups').select('id').in('id', allGroupIds).neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
+    : { data: [] }
+  const groupIds = ((acceptedGroupsRaw ?? []) as { id: string }[]).map(g => g.id)
 
   let upcomingSessions: SessionRow[] = []
   let completedCount = 0
@@ -217,7 +235,7 @@ export default async function StudentDashboard() {
   const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
   const monday = nextMondayLabel()
   const daysToMonday = daysUntilMonday()
-  const slots = slotsFromAvailability((profile as { availability?: string[] | null } | null)?.availability ?? null)
+  const slots = slotsFromAvailability(profile?.availability ?? null, profile?.timezone ?? null)
   const earliestPending = pendingEnrollments[0]
   const refundLeft = earliestPending ? refundDaysLeft(earliestPending.enrolled_at) : 0
 
@@ -229,18 +247,19 @@ export default async function StudentDashboard() {
     <div className="space-y-6 lg:space-y-8">
 
       {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+      <div className="flex items-center justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl lg:text-3xl font-bold text-gray-900 truncate">
             {greeting_word()}, {firstName} 👋
           </h1>
-          <p className="text-gray-400 text-sm mt-1">{todayLabel}</p>
+          <p className="text-gray-400 text-xs lg:text-sm mt-0.5">{todayLabel}</p>
         </div>
         <Link
           href="/student/courses"
-          className="hidden lg:inline-flex items-center gap-2 text-sm font-semibold bg-brand-500 text-white px-4 py-2.5 rounded-xl hover:bg-brand-600 transition-colors"
+          className="flex-shrink-0 inline-flex items-center gap-2 text-xs lg:text-sm font-semibold bg-brand-500 text-white px-3 lg:px-4 py-2 lg:py-2.5 rounded-xl hover:bg-brand-600 transition-colors shadow-sm"
         >
-          Browse courses →
+          <span className="hidden sm:inline">Browse courses</span>
+          <span className="sm:hidden">Browse</span> →
         </Link>
       </div>
 
@@ -264,32 +283,33 @@ export default async function StudentDashboard() {
 
         {/* Stats — 2/5 cols */}
         <div className="lg:col-span-2 flex flex-col gap-4">
-          <div className="grid grid-cols-3 lg:grid-cols-1 gap-3">
+          <div className="flex overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3 lg:grid-cols-1 gap-3 scrollbar-hide">
             {[
               { icon: '🎯', label: 'Sessions done', value: String(completedCount) },
               { icon: '📅', label: 'Upcoming',      value: String(upcomingSessions.length) },
               { icon: '📖', label: 'Current week',  value: currentWeek > 0 ? `${currentWeek}/${totalWeeks}` : '—' },
             ].map(s => (
-              <div key={s.label} className="bg-white rounded-2xl p-4 lg:p-5 border border-gray-100 shadow-sm flex lg:flex-row flex-col lg:items-center gap-3">
-                <div className="text-2xl lg:text-3xl">{s.icon}</div>
-                <div>
-                  <p className="text-xl lg:text-2xl font-bold text-gray-900">{s.value}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{s.label}</p>
+              <div key={s.label} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl p-4 lg:p-5 border border-gray-100 shadow-sm flex lg:flex-row flex-col lg:items-center gap-2 lg:gap-3">
+                <div className="text-xl lg:text-3xl">{s.icon}</div>
+                <div className="min-w-0">
+                  <p className="text-lg lg:text-2xl font-bold text-gray-900 leading-tight">{s.value}</p>
+                  <p className="text-[10px] lg:text-xs text-gray-400 mt-0.5 truncate uppercase tracking-wider font-medium">{s.label}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 hidden lg:block">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Quick access</p>
-            <div className="space-y-1">
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-2">
               {[
-                { href: '/student/sessions',     icon: '📅', label: 'View all sessions' },
-                { href: '/student/courses',       icon: '📚', label: 'Browse more courses' },
-                { href: '/student/device-check',  icon: '🎥', label: 'Test camera & mic' },
+                { href: '/student/sessions',     icon: '📅', label: 'Sessions' },
+                { href: '/student/courses',       icon: '📚', label: 'Courses' },
+                { href: '/student/device-check',  icon: '🎥', label: 'Device' },
               ].map(l => (
-                <Link key={l.href} href={l.href} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors">
-                  <span>{l.icon}</span> {l.label}
+                <Link key={l.href} href={l.href} className="flex flex-col lg:flex-row items-center lg:items-center gap-2 lg:gap-3 px-2 py-3 lg:px-3 lg:py-2.5 rounded-xl text-center lg:text-left text-xs lg:text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors border border-transparent hover:border-gray-100">
+                  <span className="text-base">{l.icon}</span> 
+                  <span className="truncate">{l.label}</span>
                 </Link>
               ))}
             </div>
@@ -330,29 +350,40 @@ export default async function StudentDashboard() {
                   {groupDetails.profiles?.bio && (
                     <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{groupDetails.profiles.bio}</p>
                   )}
-                  <a
-                    href={`mailto:support@langmaster.com?subject=Message for ${groupDetails.profiles?.name ?? 'my teacher'}`}
-                    className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-1.5 rounded-lg transition-colors"
-                  >
-                    ✉️ Message teacher
-                  </a>
+                  {groupDetails.teacher_id && (
+                    <MessageButton
+                      userId={groupDetails.teacher_id}
+                      basePath="/student/messages"
+                      label="Message teacher"
+                    />
+                  )}
                 </div>
               </div>
 
               {/* Partner + course progress card */}
               <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
                 {/* Partner */}
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${AVATAR_GRADS[1]} flex items-center justify-center text-white font-bold flex-shrink-0`}>
-                    {partner?.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="font-bold text-gray-900 text-sm">{partner?.profiles?.name?.split(' ')[0] ?? 'Your partner'}</p>
-                      <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full">Partner</span>
+                <div className="flex items-center gap-3 justify-between">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${AVATAR_GRADS[1]} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                      {partner?.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
                     </div>
-                    <p className="text-xs text-gray-400">Study partner in your group</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-gray-900 text-sm truncate">{partner?.profiles?.name?.split(' ')[0] ?? 'Your partner'}</p>
+                        <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">Partner</span>
+                      </div>
+                      <p className="text-xs text-gray-400">Study partner in your group</p>
+                    </div>
                   </div>
+                  {partner?.user_id && (
+                    <MessageButton
+                      userId={partner.user_id}
+                      basePath="/student/messages"
+                      label="Message"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                    />
+                  )}
                 </div>
 
                 <div className="border-t border-gray-100" />
@@ -504,14 +535,14 @@ export default async function StudentDashboard() {
                 )}
               </p>
               {slots.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-hide">
                   {slots.map((s, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-purple-50 rounded-xl px-4 py-2.5">
-                      <span className="text-xs font-bold text-purple-700 w-8">{s.day}</span>
-                      <span className="text-xs text-purple-600">{s.slot}</span>
+                    <div key={i} className="flex items-center gap-3 bg-brand-50 rounded-xl px-4 py-2.5 border border-brand-100/50">
+                      <span className="text-[10px] font-black text-brand-700 w-8 uppercase tracking-wider">{s.day}</span>
+                      <span className="text-[10px] font-bold text-brand-600 uppercase tracking-tight">{s.slot}</span>
                     </div>
                   ))}
-                  <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-100">
+                  <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-100 leading-relaxed">
                     Your teacher will propose specific times within these windows.
                   </p>
                 </div>

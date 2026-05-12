@@ -26,6 +26,11 @@ const TIMEZONES = [
   { label: 'UTC+12  Auckland / Fiji',            value: 'Pacific/Auckland' },
 ]
 
+const TEACH_LANGUAGES = [
+  'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
+  'Mandarin', 'Japanese', 'Korean', 'Arabic', 'Hindi', 'Russian',
+]
+
 const LEVELS = ['beginner', 'intermediate', 'advanced']
 const DURATIONS = [
   { key: '45', label: '45 min', desc: 'Focused, efficient' },
@@ -49,6 +54,7 @@ export default function TeacherOnboardingPage() {
   const [availability, setAvailability] = useState<string[]>([])
 
   // Step 1
+  const [languagesTaught, setLanguagesTaught] = useState<string[]>(['English'])
   const [preferredLevels, setPreferredLevels] = useState<string[]>([])
   const [preferredDuration, setPreferredDuration] = useState('60')
 
@@ -84,7 +90,7 @@ export default function TeacherOnboardingPage() {
 
   function canAdvance(): boolean {
     if (step === 0) return !!timezone && availability.length >= 1
-    if (step === 1) return preferredLevels.length > 0
+    if (step === 1) return languagesTaught.length > 0 && preferredLevels.length > 0
     if (step === 2) return true // Device check is skippable technically, but nice to have
     if (step === 3) return true
     return false
@@ -97,6 +103,7 @@ export default function TeacherOnboardingPage() {
       const result = await saveTeacherOnboarding({
         timezone,
         availability,
+        languagesTaught,
         preferences: {
           preferredLevels,
           preferredDuration
@@ -181,6 +188,41 @@ export default function TeacherOnboardingPage() {
             {/* Step 1: Preferences */}
             {step === 1 && (
               <div className="space-y-8">
+
+                {/* Languages you teach */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Languages you teach <span className="text-red-500">*</span></label>
+                  <p className="text-xs text-gray-400 mb-3">Currently only English is available for teaching.</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {/* English — active */}
+                    <button
+                      type="button"
+                      onClick={() => setLanguagesTaught(prev =>
+                        prev.includes('English') ? prev.filter(l => l !== 'English') : [...prev, 'English']
+                      )}
+                      className={`px-3 py-2.5 rounded-xl text-sm font-medium border transition-all text-left ${
+                        languagesTaught.includes('English')
+                          ? 'bg-brand-500 text-white border-brand-500'
+                          : 'bg-white text-gray-700 border-gray-200 hover:border-brand-300 hover:text-brand-600'
+                      }`}
+                    >
+                      {languagesTaught.includes('English') ? '✓ ' : ''}English
+                    </button>
+                    {/* Others — disabled */}
+                    {TEACH_LANGUAGES.filter(l => l !== 'English').slice(0, 5).map(l => (
+                      <button
+                        key={l}
+                        type="button"
+                        disabled
+                        className="px-3 py-2.5 rounded-xl text-sm font-medium border bg-gray-50/50 text-gray-400 border-gray-100 cursor-not-allowed text-left"
+                      >
+                        <span>{l}</span>
+                        <span className="text-[10px] block font-normal text-gray-400 mt-0.5">will come in future</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Preferred student levels <span className="text-red-500">*</span></label>
                   <div className="grid sm:grid-cols-3 gap-3">

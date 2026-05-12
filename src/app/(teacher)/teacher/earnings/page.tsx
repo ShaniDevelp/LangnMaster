@@ -22,7 +22,7 @@ export default async function EarningsPage() {
   const rate: number = (tpRaw as { rate_per_session?: number } | null)?.rate_per_session ?? 25
 
   // Completed sessions
-  const { data: groupsRaw } = await supabase.from('groups').select('id').eq('teacher_id', user.id)
+  const { data: groupsRaw } = await supabase.from('groups').select('id').eq('teacher_id', user.id).neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
   const groupIds = ((groupsRaw ?? []) as { id: string }[]).map(g => g.id)
 
   let sessions: SessionRow[] = []

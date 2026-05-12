@@ -15,6 +15,9 @@ type TeacherData = {
   avatar_url: string | null
   availability: string[]
   languages_taught: { lang: string; proficiency: string }[]
+  approvedCourseIds: string[]
+  activeGroupCount: number
+  occupiedSlots: string[]
 }
 
 type Props = {
@@ -34,6 +37,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
   const [slots, setSlots] = useState<string[]>([]) // These remain UTC keys
   const [timezone, setTimezone] = useState<string>('UTC')
   const [mounted, setMounted] = useState(false)
+  const [requireAcceptance, setRequireAcceptance] = useState(false)
 
   // Hydrate timezone
   useEffect(() => {
@@ -56,15 +60,36 @@ export function GroupBuilder({ pending, teachers }: Props) {
   const activeCourse = selectedEnrollments.length > 0 ? selectedEnrollments[0].courses : null
   const requiredSessions = activeCourse?.sessions_per_week ?? 0
 
-  // Teachers matching course language
-  const matchingTeachers = teachers.filter(t =>
-    !activeCourse || t.languages_taught.some(l => l.lang?.toLowerCase() === activeCourse.language?.toLowerCase())
-  )
-  const activeTeacher = teachers.find(t => t.id === teacherId)
-
   // Compute overlap: teacher availability ∩ all selected students' availability (UTC keys)
   const studentAvailabilities = selectedEnrollments.map(e => new Set(e.profiles?.availability ?? []))
+
+  // Teachers approved to teach the selected course (course_teachers.status='approved')
+  // Hard gate — language match alone is insufficient; teacher must have an approved course_teachers row.
+  // Also computes per-teacher overlap with selected students for ranking.
+  const allSlotKeys = DAYS.flatMap(d => HOURS.map(h => `${d}-${h}`))
+  const matchingTeachers = (activeCourse
+    ? teachers.filter(t => t.approvedCourseIds.includes(activeCourse.id))
+    : teachers
+  )
+    .map(t => {
+      const teacherSlots = new Set(t.availability)
+      let overlap = 0
+      for (const slot of allSlotKeys) {
+        if (!teacherSlots.has(slot)) continue
+        if (studentAvailabilities.length === 0 || studentAvailabilities.every(s => s.has(slot))) overlap++
+      }
+      return { ...t, _overlap: overlap }
+    })
+    .sort((a, b) => {
+      // Primary: overlap desc; Secondary: load asc (least-loaded first within same overlap)
+      if (a._overlap !== b._overlap) return b._overlap - a._overlap
+      return a.activeGroupCount - b.activeGroupCount
+    })
+
+  const activeTeacher = teachers.find(t => t.id === teacherId)
   const teacherSet = new Set(activeTeacher?.availability ?? [])
+
+  const occupiedSet = new Set(activeTeacher?.occupiedSlots ?? [])
 
   function isOverlap(key: string): boolean {
     if (!teacherSet.has(key)) return false
@@ -73,6 +98,9 @@ export function GroupBuilder({ pending, teachers }: Props) {
   }
   function isTeacherOnly(key: string): boolean {
     return teacherSet.has(key) && !studentAvailabilities.every(s => s.has(key))
+  }
+  function isOccupiedOverlap(key: string): boolean {
+    return isOverlap(key) && occupiedSet.has(key)
   }
 
   // To count overlaps accurately, we should check against all possible UTC slots
@@ -92,7 +120,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
   }
 
   function handleSlotToggle(utcKey: string) {
-    if (!isOverlap(utcKey)) return
+    if (!isOverlap(utcKey) || isOccupiedOverlap(utcKey)) return
     setSlots(prev => prev.includes(utcKey) ? prev.filter(k => k !== utcKey) : [...prev, utcKey])
   }
 
@@ -104,6 +132,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
         courseId: activeCourse.id,
         teacherId,
         slots,
+        requireAcceptance,
       })
       if (res.error) {
         setMsg({ type: 'error', text: res.error })
@@ -224,9 +253,12 @@ export function GroupBuilder({ pending, teachers }: Props) {
 
             <div className="grid sm:grid-cols-2 gap-4">
               {matchingTeachers.length === 0 ? (
-                <p className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl col-span-2">No teachers teach {activeCourse?.language}. Add languages to teacher profiles.</p>
+                <p className="text-sm text-amber-600 bg-amber-50 p-4 rounded-xl col-span-2">
+                  No approved teachers for <strong>{activeCourse?.name}</strong>. Approve a teacher request in <a href="/admin/requests" className="underline font-semibold">/admin/requests</a> first.
+                </p>
               ) : matchingTeachers.map(t => {
                 const isSelected = teacherId === t.id
+                const overlapEnough = t._overlap >= requiredSessions
                 return (
                   <button key={t.id} onClick={() => setTeacherId(t.id)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
@@ -236,10 +268,20 @@ export function GroupBuilder({ pending, teachers }: Props) {
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold">
                         {t.name.charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <p className={`font-bold ${isSelected ? 'text-[#6c4ff5]' : 'text-gray-900'}`}>{t.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className={`font-bold truncate ${isSelected ? 'text-[#6c4ff5]' : 'text-gray-900'}`}>{t.name}</p>
                         <p className="text-xs text-gray-500">{t.availability.length} hourly slots/week</p>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-100">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                        overlapEnough ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                      }`}>
+                        {t._overlap} overlap{t._overlap !== 1 ? 's' : ''}
+                      </span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
+                        {t.activeGroupCount} active group{t.activeGroupCount !== 1 ? 's' : ''}
+                      </span>
                     </div>
                   </button>
                 )
@@ -296,6 +338,7 @@ export function GroupBuilder({ pending, teachers }: Props) {
                         const utcKey = localSlotsToUTC([localKey], timezone)[0]
                         
                         const overlap = isOverlap(utcKey)
+                        const occupied = isOccupiedOverlap(utcKey)
                         const teacherOnly = isTeacherOnly(utcKey)
                         const isSelected = slots.includes(utcKey)
 
@@ -303,12 +346,14 @@ export function GroupBuilder({ pending, teachers }: Props) {
                           <div key={localKey} onClick={() => handleSlotToggle(utcKey)}
                             className={`border-l border-gray-50 h-8 transition-colors ${
                               isSelected   ? 'bg-[#6c4ff5] cursor-pointer' :
+                              occupied     ? 'bg-red-100 cursor-not-allowed' :
                               overlap      ? 'bg-purple-100 hover:bg-purple-200 cursor-pointer' :
                               teacherOnly  ? 'bg-emerald-50' :
                               'bg-white'
                             }`}
                           >
                             {isSelected && <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">✓</div>}
+                            {occupied && !isSelected && <div className="w-full h-full flex items-center justify-center text-red-400 text-xs">✕</div>}
                           </div>
                         )
                       })}
@@ -321,14 +366,26 @@ export function GroupBuilder({ pending, teachers }: Props) {
             <div className="flex items-center justify-between pt-4">
               <div className="flex items-center gap-4 text-xs flex-wrap">
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-purple-100 rounded border border-purple-200" /> Teacher + all students free</div>
+                <div className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 rounded border border-red-200" /> Already booked (not selectable)</div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-50 rounded border border-emerald-200" /> Teacher only</div>
                 <div className="flex items-center gap-1"><div className="w-3 h-3 bg-[#6c4ff5] rounded" /> Selected</div>
                 <span className="text-gray-400">Times shown in your local timezone ({timezone})</span>
               </div>
-              <button disabled={slots.length !== requiredSessions || isPending} onClick={handleSubmit}
-                className="px-6 py-2.5 rounded-xl bg-[#6c4ff5] text-white text-sm font-bold disabled:opacity-30 hover:bg-[#5c3de8] transition-colors shadow-md">
-                {isPending ? 'Creating Group…' : 'Publish Group'}
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={requireAcceptance}
+                    onChange={e => setRequireAcceptance(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-[#6c4ff5] focus:ring-purple-400"
+                  />
+                  Require teacher to accept
+                </label>
+                <button disabled={slots.length !== requiredSessions || isPending} onClick={handleSubmit}
+                  className="px-6 py-2.5 rounded-xl bg-[#6c4ff5] text-white text-sm font-bold disabled:opacity-30 hover:bg-[#5c3de8] transition-colors shadow-md">
+                  {isPending ? 'Creating Group…' : (requireAcceptance ? 'Send Proposal' : 'Publish Group')}
+                </button>
+              </div>
             </div>
           </div>
         )}

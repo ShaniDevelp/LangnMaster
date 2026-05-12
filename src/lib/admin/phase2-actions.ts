@@ -8,6 +8,7 @@ type ManualGroupParams = {
   courseId: string
   teacherId: string
   slots: string[] // e.g. ["Mon-10:00", "Wed-10:00"]
+  requireAcceptance?: boolean // when true, group is created in 'pending_teacher' state and goes live only after teacher accepts
 }
 
 export async function assignManualGroup(params: ManualGroupParams): Promise<{ error?: string }> {
@@ -25,8 +26,20 @@ export async function assignManualGroup(params: ManualGroupParams): Promise<{ er
     .select('duration_weeks')
     .eq('id', params.courseId)
     .single()
-    
+
   if (!course) return { error: 'Course not found' }
+
+  // 2a. Approval gate: teacher must have an approved course_teachers row for this course
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: approval } = await (supabase as any)
+    .from('course_teachers')
+    .select('id')
+    .eq('teacher_id', params.teacherId)
+    .eq('course_id', params.courseId)
+    .eq('status', 'approved')
+    .maybeSingle()
+
+  if (!approval) return { error: 'Teacher is not approved to teach this course' }
 
   // 3. Fetch enrollments to get user_ids
   const { data: enrollments } = await supabase
@@ -37,62 +50,76 @@ export async function assignManualGroup(params: ManualGroupParams): Promise<{ er
   if (!enrollments || enrollments.length === 0) return { error: 'No enrollments found' }
 
   const weekStart = getNextMonday()
+  const requireAcceptance = params.requireAcceptance ?? false
 
   // 4. Create Group
-  const { data: group, error: groupErr } = await supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const groupInsert: any = {
+    course_id: params.courseId,
+    teacher_id: params.teacherId,
+    week_start: weekStart,
+  }
+  if (requireAcceptance) {
+    groupInsert.acceptance_status = 'pending_teacher'
+    groupInsert.proposed_at = new Date().toISOString()
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: group, error: groupErr } = await (supabase as any)
     .from('groups')
-    .insert({
-      course_id: params.courseId,
-      teacher_id: params.teacherId,
-      week_start: weekStart
-    })
+    .insert(groupInsert)
     .select('id')
     .single()
 
   if (groupErr || !group) return { error: groupErr?.message ?? 'Failed to create group' }
 
-  // 5. Add members
+  // 5. Add members (so teacher can preview the roster on their proposal page)
   const { error: membersErr } = await supabase
     .from('group_members')
     .insert(enrollments.map(e => ({ group_id: group.id, user_id: e.user_id })))
 
   if (membersErr) return { error: membersErr.message }
 
-  // 6. Generate precise sessions based on exact timeslots
+  // 6. Generate precise sessions based on exact timeslots (preview-able by teacher even when pending)
   const sessions = generatePreciseSessions(group.id, weekStart, params.slots, course.duration_weeks)
   const { error: sessErr } = await supabase.from('sessions').insert(sessions)
   if (sessErr) return { error: sessErr.message }
 
-  // 7. Update enrollments to assigned
-  const { error: enrollErr } = await supabase
-    .from('enrollments')
-    .update({ status: 'assigned' })
-    .in('id', params.enrollmentIds)
+  // 7. Update enrollment status — only flip to 'assigned' once teacher has accepted (or if no acceptance gate)
+  if (!requireAcceptance) {
+    const { error: enrollErr } = await supabase
+      .from('enrollments')
+      .update({ status: 'assigned' })
+      .in('id', params.enrollmentIds)
 
-  if (enrollErr) return { error: enrollErr.message }
+    if (enrollErr) return { error: enrollErr.message }
+  }
 
-  // 8. Trigger Notifications (to Teacher and Students)
-  // Notify Teacher
+  // 8. Notifications
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (supabase as any).from('notifications').insert({
     user_id: params.teacherId,
-    type: 'new_group_assigned',
+    type: requireAcceptance ? 'group_proposed' : 'new_group_assigned',
     payload: { group_id: group.id, students: enrollments.length }
   })
-  // Notify Students
-  for (const e of enrollments) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from('notifications').insert({
-      user_id: e.user_id,
-      type: 'group_assigned',
-      payload: { group_id: group.id }
-    })
+
+  // Only notify students if the group is live (no acceptance gate)
+  if (!requireAcceptance) {
+    for (const e of enrollments) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from('notifications').insert({
+        user_id: e.user_id,
+        type: 'group_assigned',
+        payload: { group_id: group.id }
+      })
+    }
   }
 
   revalidatePath('/admin/enrollments')
   revalidatePath('/admin/groups')
   revalidatePath('/admin/dashboard')
-  
+  revalidatePath('/teacher/proposals')
+
   return {}
 }
 

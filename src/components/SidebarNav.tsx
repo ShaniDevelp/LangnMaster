@@ -3,11 +3,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
+import { UnreadMessagesBadge } from '@/components/chat/UnreadMessagesBadge'
 
 const NAV = [
   { href: '/student/dashboard', icon: '🏠', label: 'Home' },
   { href: '/student/courses',   icon: '📚', label: 'Courses' },
   { href: '/student/sessions',  icon: '📅', label: 'Sessions' },
+  { href: '/student/messages',  icon: '💬', label: 'Messages', badge: true },
   { href: '/student/profile',   icon: '👤', label: 'Profile' },
 ]
 
@@ -18,7 +20,6 @@ export function SidebarNav({ profile }: { profile: Profile }) {
     <>
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-100 z-40">
-        {/* Logo */}
         <div className="px-6 py-5 border-b border-gray-100">
           <Link href="/student/dashboard" className="text-xl font-bold text-brand-500">
             LangMaster
@@ -26,7 +27,6 @@ export function SidebarNav({ profile }: { profile: Profile }) {
           <p className="text-[11px] text-gray-400 mt-0.5 font-medium uppercase tracking-wider">Student Portal</p>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
           {NAV.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
@@ -42,6 +42,7 @@ export function SidebarNav({ profile }: { profile: Profile }) {
               >
                 <span className="text-base w-5 text-center">{item.icon}</span>
                 <span>{item.label}</span>
+                {item.badge && !active && <UnreadMessagesBadge userId={profile.id} />}
                 {active && (
                   <span className="ml-auto h-5 w-1 rounded-full bg-brand-500" />
                 )}
@@ -50,7 +51,6 @@ export function SidebarNav({ profile }: { profile: Profile }) {
           })}
         </nav>
 
-        {/* User */}
         <div className="p-4 border-t border-gray-100 space-y-2">
           <Link
             href="/student/profile"
@@ -73,35 +73,28 @@ export function SidebarNav({ profile }: { profile: Profile }) {
         </div>
       </aside>
 
-      {/* ── Mobile top bar ──────────────────────────────────── */}
-      <header className="lg:hidden sticky top-0 z-40 glass border-b border-gray-100">
-        <div className="flex items-center justify-between px-4 h-14">
-          <Link href="/student/dashboard" className="text-lg font-bold text-brand-500">
-            LangMaster
-          </Link>
-          <Link href="/student/profile">
-            <Avatar name={profile.name} />
-          </Link>
-        </div>
-      </header>
-
       {/* ── Mobile bottom nav ───────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass border-t border-gray-100 pb-safe">
-        <div className="flex justify-around items-center h-16 max-w-lg mx-auto px-2">
+        <div className="flex justify-between items-center h-16 max-w-lg mx-auto px-1">
           {NAV.map(item => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/')
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-colors ${
-                  active ? 'text-brand-500' : 'text-gray-400 hover:text-gray-600'
+                className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 transition-colors ${
+                  active ? 'text-brand-500' : 'text-gray-400'
                 }`}
               >
                 <span className="text-xl">{item.icon}</span>
-                <span className={`text-[10px] font-medium ${active ? 'text-brand-500' : ''}`}>
+                <span className={`text-[9px] font-bold uppercase tracking-tight ${active ? 'text-brand-500' : ''}`}>
                   {item.label}
                 </span>
+                {item.badge && !active && (
+                  <span className="absolute top-1 right-1/2 translate-x-4">
+                    <MobileDot userId={profile.id} />
+                  </span>
+                )}
               </Link>
             )
           })}
@@ -117,4 +110,8 @@ function Avatar({ name }: { name: string }) {
       {name.charAt(0).toUpperCase()}
     </div>
   )
+}
+
+function MobileDot({ userId }: { userId: string }) {
+  return <UnreadMessagesBadge userId={userId} dot />
 }

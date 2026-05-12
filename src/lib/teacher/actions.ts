@@ -64,6 +64,7 @@ export async function submitApplication(
 type TeacherOnboardingData = {
   timezone: string
   availability: string[]
+  languagesTaught: string[]
   preferences: {
     preferredLevels: string[]
     preferredDuration: string
@@ -93,7 +94,7 @@ export async function saveTeacherOnboarding(
       availability: data.availability as unknown as string[],
       onboarding_completed: true,
       preferences: data.preferences,
-      languages_taught: appData?.languages_taught ?? [],
+      languages_taught: data.languagesTaught.map(lang => ({ lang, proficiency: 'native' })),
       certifications: appData?.certifications ?? [],
       intro_video_url: appData?.intro_video_url ?? null,
       bio: appData?.teaching_bio ?? null,
@@ -152,6 +153,133 @@ export async function approveTeacher(
     // We don't set onboarding_completed here — teacher must complete the wizard first.
     // We just need the approved flag to let them through /teacher/application and /teacher/onboarding.
     void profileErr // not blocking
+  }
+
+  return {}
+}
+
+// ── Teacher: respond to a group proposal ─────────────────────────────────────
+
+export async function acceptGroupProposal(groupId: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const admin = createAdminClient()
+
+  // Verify caller is the proposed teacher and group is in pending_teacher state
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: group } = await (admin as any)
+    .from('groups')
+    .select('id, teacher_id, course_id, acceptance_status')
+    .eq('id', groupId)
+    .single()
+
+  if (!group) return { error: 'Group not found' }
+  if (group.teacher_id !== user.id) return { error: 'Not authorized' }
+  if (group.acceptance_status !== 'pending_teacher') return { error: 'Group is not pending acceptance' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: updateErr } = await (admin as any)
+    .from('groups')
+    .update({ acceptance_status: 'accepted', responded_at: new Date().toISOString() })
+    .eq('id', groupId)
+
+  if (updateErr) return { error: updateErr.message }
+
+  // Flip enrollments for all members of this group to 'assigned'
+  const { data: members } = await admin
+    .from('group_members')
+    .select('user_id')
+    .eq('group_id', groupId)
+
+  const memberIds = (members ?? []).map((m: { user_id: string }) => m.user_id)
+
+  if (memberIds.length > 0) {
+    await admin
+      .from('enrollments')
+      .update({ status: 'assigned' })
+      .eq('course_id', group.course_id)
+      .in('user_id', memberIds)
+      .eq('status', 'pending')
+
+    for (const userId of memberIds) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (admin as any).from('notifications').insert({
+        user_id: userId,
+        type: 'group_assigned',
+        payload: { group_id: groupId },
+      })
+    }
+  }
+
+  return {}
+}
+
+export async function declineGroupProposal(groupId: string, reason?: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const admin = createAdminClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: group } = await (admin as any)
+    .from('groups')
+    .select('id, teacher_id, course_id, acceptance_status, declined_teachers, courses(name)')
+    .eq('id', groupId)
+    .single()
+
+  if (!group) return { error: 'Group not found' }
+  if (group.teacher_id !== user.id) return { error: 'Not authorized' }
+  if (group.acceptance_status !== 'pending_teacher') return { error: 'Group is not pending acceptance' }
+
+  const { data: teacherProfile } = await admin
+    .from('profiles')
+    .select('name')
+    .eq('id', user.id)
+    .single()
+
+  const teacherName = (teacherProfile as { name: string } | null)?.name ?? 'Teacher'
+
+  // Append this teacher's decline to the group's declined_teachers array
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const existingDeclined: any[] = Array.isArray(group.declined_teachers) ? group.declined_teachers : []
+  const updatedDeclined = [
+    ...existingDeclined,
+    {
+      teacher_id: user.id,
+      teacher_name: teacherName,
+      reason: reason ?? null,
+      declined_at: new Date().toISOString(),
+    },
+  ]
+
+  // Mark group as declined — do NOT delete it; admin will reassign a new teacher
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from('groups').update({
+    acceptance_status: 'declined',
+    responded_at: new Date().toISOString(),
+    declined_teachers: updatedDeclined,
+  }).eq('id', groupId)
+
+  // Notify admins so they can reassign
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const courseName = (group.courses as any)?.name ?? 'Unknown Course'
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin')
+  for (const a of (admins ?? []) as { id: string }[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any).from('notifications').insert({
+      user_id: a.id,
+      type: 'group_proposal_declined',
+      payload: {
+        group_id: groupId,
+        teacher_id: user.id,
+        teacher_name: teacherName,
+        course_id: group.course_id,
+        course_name: courseName,
+        reason: reason ?? null,
+      },
+    })
   }
 
   return {}

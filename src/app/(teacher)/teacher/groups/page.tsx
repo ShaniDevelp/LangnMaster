@@ -18,6 +18,7 @@ export default async function TeacherGroupsPage() {
     .from('groups')
     .select('*, courses(name, language, level, sessions_per_week, duration_weeks), group_members(*, profiles:user_id(id, name, avatar_url))')
     .eq('teacher_id', user.id)
+    .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
     .order('created_at', { ascending: false })
 
   const groups = (groupsRaw ?? []) as unknown as GroupRow[]

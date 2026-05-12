@@ -14,15 +14,15 @@ export type PeriodKey = (typeof PERIODS)[number]
 
 /** Local clock hours (0-23) covered by each period */
 export const PERIOD_LOCAL_HOURS: Record<PeriodKey, number[]> = {
-  morning:   [6,  7,  8,  9,  10, 11],
+  morning: [6, 7, 8, 9, 10, 11],
   afternoon: [12, 13, 14, 15, 16, 17],
-  evening:   [18, 19, 20, 21, 22, 23],
+  evening: [18, 19, 20, 21, 22, 23],
 }
 
 export const PERIOD_LABEL: Record<PeriodKey, string> = {
-  morning:   'Morning  6 am – 12 pm',
+  morning: 'Morning  6 am – 12 pm',
   afternoon: 'Afternoon  12 pm – 6 pm',
-  evening:   'Evening  6 pm – 12 am',
+  evening: 'Evening  6 pm – 12 am',
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -43,18 +43,24 @@ export function getUTCOffset(timezone: string): number {
   if (!timezone) return 0
   try {
     const now = new Date()
-    // Create a date string in the target timezone and compare with UTC
-    const local = new Intl.DateTimeFormat('en-US', {
+    // formatToParts gives typed parts — avoids toLocaleString parsing issues
+    // (Node 18+ uses U+202F before AM/PM, which new Date() can't parse)
+    // and avoids the single-hour subtraction bug that breaks at day boundaries.
+    const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone,
-      hour: 'numeric',
-      hour12: false,
-    }).format(now)
-    const utc = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'UTC',
-      hour: 'numeric',
-      hour12: false,
-    }).format(now)
-    return parseInt(local, 10) - parseInt(utc, 10)
+      hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
+    }).formatToParts(now)
+    const get = (t: string) =>
+      parseInt(parts.find(p => p.type === t)?.value ?? '0', 10)
+    // Reconstruct wall-clock time as a UTC epoch for clean diffing
+    const wallMs = Date.UTC(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'))
+    const utcMs  = Date.UTC(
+      now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(),
+      now.getUTCHours(), now.getUTCMinutes()
+    )
+    return Math.round((wallMs - utcMs) / 3600000)
   } catch {
     return 0
   }

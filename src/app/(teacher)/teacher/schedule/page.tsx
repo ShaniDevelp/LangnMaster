@@ -19,11 +19,11 @@ export default async function TeacherSchedulePage() {
   const { data: profileRaw } = await supabase.from('profiles').select('timezone').eq('id', user.id).single()
   const timezone = (profileRaw as { timezone: string | null } | null)?.timezone ?? ''
 
-  // All groups for this teacher
   const { data: groupsRaw } = await supabase
     .from('groups')
     .select('id')
     .eq('teacher_id', user.id)
+    .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
 
   const groupIds = ((groupsRaw ?? []) as { id: string }[]).map(g => g.id)
 

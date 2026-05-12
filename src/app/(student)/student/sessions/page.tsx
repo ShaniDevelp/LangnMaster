@@ -12,7 +12,13 @@ export default async function StudentSessionsPage() {
     .select('group_id')
     .eq('user_id', user.id)
 
-  const groupIds = ((memberGroupsRaw ?? []) as { group_id: string }[]).map(m => m.group_id)
+  const allGroupIds = ((memberGroupsRaw ?? []) as { group_id: string }[]).map(m => m.group_id)
+
+  // Exclude groups still pending teacher acceptance
+  const { data: acceptedGroupsRaw } = allGroupIds.length > 0
+    ? await supabase.from('groups').select('id').in('id', allGroupIds).neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
+    : { data: [] }
+  const groupIds = ((acceptedGroupsRaw ?? []) as { id: string }[]).map(g => g.id)
 
   let sessions: any[] = []
   if (groupIds.length > 0) {
@@ -33,21 +39,21 @@ export default async function StudentSessionsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">My Sessions</h1>
-          <p className="text-gray-500 font-medium mt-1">
-            View your schedule, join live calls, and review past lesson materials.
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">My Sessions</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            View your schedule, join live calls, and review lesson materials.
           </p>
         </div>
-        <div className="flex gap-3 text-xs font-bold uppercase tracking-widest text-gray-400">
+        <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 bg-brand-500 rounded-full" />
-            {sessions.filter(s => s.status === 'scheduled' || s.status === 'active').length} Upcoming
+            <span>{sessions.filter(s => s.status === 'scheduled' || s.status === 'active').length} Upcoming</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 bg-gray-300 rounded-full" />
-            {sessions.filter(s => s.status === 'completed').length} Completed
+            <span>{sessions.filter(s => s.status === 'completed').length} Past</span>
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ export default async function TeacherSessionsPage() {
     .from('groups')
     .select('id')
     .eq('teacher_id', user.id)
+    .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
   const groupIds = ((groupsRaw ?? []) as { id: string }[]).map(g => g.id)
 
   let sessions: any[] = []

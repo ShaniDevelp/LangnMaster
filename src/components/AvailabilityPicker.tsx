@@ -119,110 +119,114 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
       </div>
 
       {/* Period grid */}
-      <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm">
-        {/* Day header */}
-        <div className="grid border-b border-gray-100 bg-gray-50" style={{ gridTemplateColumns: '90px repeat(7, 1fr)' }}>
-          <div />
-          {DAYS.map(d => (
-            <div key={d} className="py-2 text-center text-xs font-bold text-gray-500">{d}</div>
-          ))}
-        </div>
+      <div className="border border-gray-100 rounded-2xl bg-white shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+        <div className="min-w-[400px] md:min-w-full">
+          {/* Day header */}
+          <div className="grid border-b border-gray-100 bg-gray-50 sticky top-0 z-20" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
+            <div className="sticky left-0 bg-gray-50 z-30 border-r border-gray-100" />
+            {DAYS.map(d => (
+              <div key={d} className="py-2 text-center text-[10px] font-bold text-gray-500">{d}</div>
+            ))}
+          </div>
 
-        {/* Period rows */}
-        {PERIODS.map((period, pi) => {
-          const colors = periodColor(period)
-          return (
-            <div key={period}>
-              {/* Period row */}
-              <div
-                className={`grid items-center ${pi !== 0 ? 'border-t border-gray-100' : ''}`}
-                style={{ gridTemplateColumns: '90px repeat(7, 1fr)' }}
-              >
-                <div className="px-3 py-3">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
-                    {period.charAt(0).toUpperCase() + period.slice(1)}
-                  </span>
-                  <p className="text-[9px] text-gray-300 leading-tight mt-0.5">
-                    {period === 'morning' ? '6am–12pm' : period === 'afternoon' ? '12pm–6pm' : '6pm–12am'}
-                  </p>
-                </div>
-                {DAYS.map(day => {
-                  const active = isPeriodActive(day, period)
-                  const full   = isPeriodFullyActive(day, period)
-                  const expandKey = `${day}-${period}`
-                  const isOpen = expanded.has(expandKey)
-                  return (
-                    <div key={day} className="py-2 px-1 flex flex-col items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => togglePeriod(day, period)}
-                        className={`w-8 h-8 rounded-xl text-xs font-bold border-2 transition-all ${
-                          active
-                            ? `${colors.active} border-transparent shadow-sm`
-                            : `border-gray-100 bg-gray-50 text-gray-300 ${colors.hover}`
-                        }`}
-                        title={`Toggle ${day} ${period}`}
-                      >
-                        {full ? '✓' : active ? '~' : ''}
-                      </button>
-                      {active && (
+          {/* Period rows */}
+          {PERIODS.map((period, pi) => {
+            const colors = periodColor(period)
+            return (
+              <div key={period}>
+                {/* Period row */}
+                <div
+                  className={`grid items-center ${pi !== 0 ? 'border-t border-gray-100' : ''}`}
+                  style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}
+                >
+                  <div className="px-2 py-3 sticky left-0 bg-white z-10 border-r border-gray-100 shadow-[1px_0_0_rgba(0,0,0,0.05)]">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                      {period.charAt(0).toUpperCase() + period.slice(1)}
+                    </span>
+                    <p className="text-[8px] text-gray-300 leading-tight mt-0.5 whitespace-nowrap">
+                      {period === 'morning' ? '6am–12pm' : period === 'afternoon' ? '12pm–6pm' : '6pm–12am'}
+                    </p>
+                  </div>
+                  {DAYS.map(day => {
+                    const active = isPeriodActive(day, period)
+                    const full   = isPeriodFullyActive(day, period)
+                    const expandKey = `${day}-${period}`
+                    const isOpen = expanded.has(expandKey)
+                    return (
+                      <div key={day} className="py-2 px-1 flex flex-col items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => toggleExpand(day, period)}
-                          className="text-[9px] text-gray-400 hover:text-gray-600 leading-none"
-                          title="Fine-tune hours"
+                          onClick={() => togglePeriod(day, period)}
+                          className={`w-8 h-8 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center ${
+                            active
+                              ? `${colors.active} border-transparent shadow-sm`
+                              : `border-gray-100 bg-gray-50 text-gray-300 ${colors.hover}`
+                          }`}
+                          title={`Toggle ${day} ${period}`}
                         >
-                          {isOpen ? '▲' : '▼'}
+                          {full ? '✓' : active ? '~' : ''}
                         </button>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-
-              {/* Hour expansion rows — shown when any day in this period is expanded */}
-              {DAYS.some(d => expanded.has(`${d}-${period}`)) && (
-                <div className="bg-gray-50 border-t border-dashed border-gray-100">
-                  {PERIOD_LOCAL_HOURS[period].map(h => (
-                    <div
-                      key={h}
-                      className="grid items-center border-t border-gray-100 first:border-0"
-                      style={{ gridTemplateColumns: '90px repeat(7, 1fr)' }}
-                    >
-                      <div className="px-3 py-1.5 text-[10px] text-gray-400 font-medium">
-                        {h < 12 ? `${h}:00 am` : h === 12 ? '12:00 pm' : `${h - 12}:00 pm`}
+                        {active && (
+                          <button
+                            type="button"
+                            onClick={() => toggleExpand(day, period)}
+                            className="text-[9px] text-gray-400 hover:text-gray-600 leading-none py-1 w-full flex justify-center"
+                            title="Fine-tune hours"
+                          >
+                            {isOpen ? '▲' : '▼'}
+                          </button>
+                        )}
                       </div>
-                      {DAYS.map(day => {
-                        const expandKey = `${day}-${period}`
-                        if (!expanded.has(expandKey)) {
-                          return <div key={day} />
-                        }
-                        const slot = `${day}-${fmt(h)}`
-                        const active = localSlots.includes(slot)
-                        const c = periodColor(period)
-                        return (
-                          <div key={day} className="py-1 px-1 flex items-center justify-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleHour(day, h)}
-                              className={`w-6 h-6 rounded-lg text-[9px] font-bold transition-all border ${
-                                active
-                                  ? `${c.active} border-transparent`
-                                  : `border-gray-200 bg-white text-gray-300 ${c.hover}`
-                              }`}
-                            >
-                              {active ? '✓' : ''}
-                            </button>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
-              )}
-            </div>
-          )
-        })}
+
+                {/* Hour expansion rows — shown when any day in this period is expanded */}
+                {DAYS.some(d => expanded.has(`${d}-${period}`)) && (
+                  <div className="bg-gray-50/50 border-t border-dashed border-gray-100">
+                    {PERIOD_LOCAL_HOURS[period].map(h => (
+                      <div
+                        key={h}
+                        className="grid items-center border-t border-gray-100 first:border-0"
+                        style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}
+                      >
+                        <div className="px-2 py-1.5 text-[9px] text-gray-400 font-medium sticky left-0 bg-gray-50 z-10 border-r border-gray-100">
+                          {h < 12 ? `${h}:00 am` : h === 12 ? '12:00 pm' : `${h - 12}:00 pm`}
+                        </div>
+                        {DAYS.map(day => {
+                          const expandKey = `${day}-${period}`
+                          if (!expanded.has(expandKey)) {
+                            return <div key={day} />
+                          }
+                          const slot = `${day}-${fmt(h)}`
+                          const active = localSlots.includes(slot)
+                          const c = periodColor(period)
+                          return (
+                            <div key={day} className="py-1 px-1 flex items-center justify-center">
+                              <button
+                                type="button"
+                                onClick={() => toggleHour(day, h)}
+                                className={`w-6 h-6 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-center ${
+                                  active
+                                    ? `${c.active} border-transparent`
+                                    : `border-gray-200 bg-white text-gray-300 ${c.hover}`
+                                }`}
+                              >
+                                {active ? '✓' : ''}
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        </div>
       </div>
 
       {/* Legend */}

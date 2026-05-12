@@ -68,7 +68,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 function SectionCard({ title, icon, children, desc }: { title: string; icon: string; children: React.ReactNode; desc?: string }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-50">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-50">
         <div className="flex items-center gap-2.5">
           <span className="text-xl">{icon}</span>
           <div>
@@ -77,7 +77,7 @@ function SectionCard({ title, icon, children, desc }: { title: string; icon: str
           </div>
         </div>
       </div>
-      <div className="p-6">{children}</div>
+      <div className="p-4 sm:p-6">{children}</div>
     </div>
   )
 }
@@ -183,14 +183,14 @@ export function ProfileClient({ profile, userId }: Props) {
       )}
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl w-full overflow-x-auto">
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-2xl w-full">
         {TABS.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold whitespace-nowrap transition-all flex-1 justify-center ${
+            className={`flex items-center justify-center gap-1.5 px-2 sm:px-4 py-2.5 rounded-xl text-sm font-semibold transition-all flex-1 ${
               activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}>
-            <span>{tab.icon}</span>
-            {tab.label}
+            <span className="text-base sm:text-sm">{tab.icon}</span>
+            <span className="hidden sm:inline whitespace-nowrap">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -265,12 +265,12 @@ export function ProfileClient({ profile, userId }: Props) {
                 {languages.length > 0 && (
                   <div className="border-t border-gray-100 pt-4 space-y-3">
                     {languages.map(({ lang, proficiency }) => (
-                      <div key={lang} className="flex items-center gap-3 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-700 w-24 flex-shrink-0">{lang}</span>
+                      <div key={lang} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <span className="text-sm font-semibold text-gray-700 sm:w-24 flex-shrink-0">{lang}</span>
                         <div className="flex gap-2 flex-wrap">
                           {PROFICIENCY.map(p => (
                             <button key={p} type="button" onClick={() => setProficiency(lang, p)}
-                              className={`px-3 py-1 rounded-lg text-xs font-semibold border-2 transition-all ${
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-2 transition-all ${
                                 proficiency === p ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-600 border-gray-200 hover:border-emerald-300'
                               }`}>
                               {p.replace('_', ' ')}
@@ -416,12 +416,12 @@ export function ProfileClient({ profile, userId }: Props) {
 
           <SectionCard icon="⚠️" title="Danger zone" desc="Irreversible account actions">
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-xl border-2 border-red-100 bg-red-50">
-                <div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border-2 border-red-100 bg-red-50">
+                <div className="flex-1">
                   <p className="text-sm font-bold text-red-700">Delete account</p>
                   <p className="text-xs text-red-500 mt-0.5">This will permanently remove all your data. Sessions will be cancelled.</p>
                 </div>
-                <button className="px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors flex-shrink-0">
+                <button className="self-start sm:self-auto px-4 py-2 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors flex-shrink-0">
                   Delete
                 </button>
               </div>

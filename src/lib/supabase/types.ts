@@ -299,6 +299,57 @@ export type GroupWithDetails = Group & {
   group_members: Array<GroupMember & { profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null }>
 }
 
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+export type MessageType = 'text' | 'voice_note' | 'file' | 'image'
+export type ConversationType = 'direct' | 'group'
+
+export type Conversation = {
+  id: string
+  type: ConversationType
+  group_id: string | null
+  created_at: string
+}
+
+export type ConversationParticipant = {
+  id: string
+  conversation_id: string
+  user_id: string
+  last_read_at: string
+  joined_at: string
+}
+
+export type Message = {
+  id: string
+  conversation_id: string
+  sender_id: string | null
+  type: MessageType
+  content: string | null
+  file_url: string | null
+  file_name: string | null
+  file_size: number | null
+  mime_type: string | null
+  duration_seconds: number | null
+  reply_to_id: string | null
+  created_at: string
+  deleted_at: string | null
+}
+
+// Composite types for UI
+export type MessageWithSender = Message & {
+  sender: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null
+  reply_to: Pick<Message, 'id' | 'content' | 'type' | 'sender_id'> | null
+}
+
+export type ConversationWithMeta = Conversation & {
+  participants: Array<ConversationParticipant & {
+    profiles: Pick<Profile, 'id' | 'name' | 'avatar_url' | 'role'>
+  }>
+  last_message: MessageWithSender | null
+  unread_count: number
+  group_name?: string | null
+}
+
 // ── Phase 1: Teacher vetting ──────────────────────────────────────────────────
 
 export type TeacherApplication = {

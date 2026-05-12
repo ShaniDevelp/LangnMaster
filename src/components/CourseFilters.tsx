@@ -38,9 +38,20 @@ export function CourseFilters({ languages }: { languages: string[] }) {
       {/* Language filter */}
       <div className="flex flex-wrap gap-2">
         <FilterChip active={activeLang === 'all'} onClick={() => update('lang', 'all')}>All</FilterChip>
-        {languages.map(l => (
-          <FilterChip key={l} active={activeLang === l} onClick={() => update('lang', l)}>{l}</FilterChip>
-        ))}
+        {languages.map(l => {
+          const isEnglish = l === 'English'
+          return (
+            <FilterChip
+              key={l}
+              active={activeLang === l}
+              onClick={() => update('lang', l)}
+              disabled={!isEnglish}
+            >
+              {l}
+              {!isEnglish && <span className="text-[9px] opacity-60 ml-1.5 font-normal tracking-tight">coming soon</span>}
+            </FilterChip>
+          )
+        })}
       </div>
 
       {/* Level + sort row */}
@@ -72,22 +83,27 @@ function FilterChip({
   active,
   onClick,
   size = 'md',
+  disabled = false,
 }: {
   children: React.ReactNode
   active: boolean
   onClick: () => void
   size?: 'sm' | 'md'
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className={`rounded-full font-medium transition-all border ${
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      className={`rounded-full font-medium transition-all border flex items-center ${
         size === 'sm' ? 'text-xs px-3 py-1' : 'text-sm px-4 py-1.5'
       } ${
-        active
-          ? 'bg-brand-500 text-white border-brand-500'
-          : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300 hover:text-brand-600'
+        disabled
+          ? 'bg-gray-50/50 text-gray-400 border-gray-100 cursor-not-allowed'
+          : active
+            ? 'bg-brand-500 text-white border-brand-500'
+            : 'bg-white text-gray-600 border-gray-200 hover:border-brand-300 hover:text-brand-600'
       }`}
     >
       {children}
