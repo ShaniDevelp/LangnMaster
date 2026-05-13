@@ -28,8 +28,9 @@ export default async function StudentSessionsPage() {
         *,
         groups (
           *,
-          courses (name, language, level),
-          profiles:teacher_id (name, avatar_url)
+          week_start,
+          courses (name, language, level, sessions_per_week, duration_weeks),
+          profiles:teacher_id (id, name, avatar_url, bio, years_experience, languages_taught)
         )
       `)
       .in('group_id', groupIds)
@@ -46,14 +47,14 @@ export default async function StudentSessionsPage() {
             View your schedule, join live calls, and review lesson materials.
           </p>
         </div>
-        <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+        <div className="flex items-center gap-4 text-xs font-semibold text-gray-400">
           <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-brand-500 rounded-full" />
-            <span>{sessions.filter(s => s.status === 'scheduled' || s.status === 'active').length} Upcoming</span>
+            <span className="w-2 h-2 bg-[#6c4ff5] rounded-full" />
+            <span>{sessions.filter(s => s.status === 'scheduled' || s.status === 'active').length} upcoming</span>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 bg-gray-300 rounded-full" />
-            <span>{sessions.filter(s => s.status === 'completed').length} Past</span>
+            <span>{sessions.filter(s => s.status === 'completed').length} completed</span>
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@ export function StudentLayoutClient({
 
   if (isSession) {
     return (
-      <div className="min-h-screen bg-[#0f172a]">
+      <div className="min-h-screen bg-gray-50">
         <main className="min-h-screen w-full">
           {children}
         </main>

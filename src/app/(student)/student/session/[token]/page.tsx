@@ -56,7 +56,7 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
     ? Math.max(1, Math.floor((nowMs - new Date(weekStart).getTime()) / (7 * 86_400_000)) + 1)
     : 1
 
-  const [partnersRes, moduleRes, nextRes] = await Promise.all([
+  const [partnersRes, moduleRes, nextRes, sessionIndexRes] = await Promise.all([
     supabase
       .from('group_members')
       .select('user_id, profiles(name)')
@@ -79,6 +79,11 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
       .order('scheduled_at', { ascending: true })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from('sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('group_id', groupId)
+      .lte('scheduled_at', session.scheduled_at),
   ])
 
   const members = (partnersRes.data ?? []) as unknown as MemberRow[]
@@ -88,6 +93,8 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
 
   const weekModule = moduleRes.data as ModuleRow | null
   const nextSession = nextRes.data as NextRow | null
+  const sessionNumber = sessionIndexRes.count ?? 1
+  const totalSessions = (course?.sessions_per_week ?? 1) * (course?.duration_weeks ?? 1)
 
   return (
     <SessionRoom
@@ -107,6 +114,8 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
       weekTopic={weekModule?.title ?? null}
       nextSessionAt={nextSession?.scheduled_at ?? null}
       nextSessionToken={nextSession?.room_token ?? null}
+      sessionNumber={sessionNumber}
+      totalSessions={totalSessions}
     />
   )
 }

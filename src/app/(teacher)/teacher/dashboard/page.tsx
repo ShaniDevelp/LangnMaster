@@ -43,26 +43,37 @@ export default async function TeacherDashboard() {
 
   let upcoming: SessionRow[] = []
   let recentCompleted: SessionRow[] = []
+  let missedSessions: SessionRow[] = []
 
   if (groupIds.length > 0) {
-    const { data: upRaw } = await supabase
-      .from('sessions')
-      .select('*, groups(*, courses(name, language))')
-      .in('group_id', groupIds)
-      .in('status', ['scheduled', 'active'])
-      .gte('scheduled_at', new Date().toISOString())
-      .order('scheduled_at', { ascending: true })
-      .limit(6)
-    upcoming = (upRaw ?? []) as unknown as SessionRow[]
-
-    const { data: doneRaw } = await supabase
-      .from('sessions')
-      .select('*, groups(*, courses(name, language))')
-      .in('group_id', groupIds)
-      .eq('status', 'completed')
-      .order('scheduled_at', { ascending: false })
-      .limit(3)
-    recentCompleted = (doneRaw ?? []) as unknown as SessionRow[]
+    const [upRes, doneRes, missedRes] = await Promise.all([
+      supabase
+        .from('sessions')
+        .select('*, groups(*, courses(name, language))')
+        .in('group_id', groupIds)
+        .in('status', ['scheduled', 'active'])
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(6),
+      supabase
+        .from('sessions')
+        .select('*, groups(*, courses(name, language))')
+        .in('group_id', groupIds)
+        .eq('status', 'completed')
+        .order('scheduled_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('sessions')
+        .select('*, groups(*, courses(name, language))')
+        .in('group_id', groupIds)
+        .eq('status', 'scheduled')
+        .lt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: false })
+        .limit(5),
+    ])
+    upcoming = (upRes.data ?? []) as unknown as SessionRow[]
+    recentCompleted = (doneRes.data ?? []) as unknown as SessionRow[]
+    missedSessions = (missedRes.data ?? []) as unknown as SessionRow[]
   }
 
   const totalStudents = groups.reduce((acc, g) => acc + g.group_members.length, 0)
@@ -128,6 +139,32 @@ export default async function TeacherDashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── Missed sessions alert ── */}
+      {missedSessions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="text-xl flex-shrink-0">⚠️</span>
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-800 text-sm">
+                {missedSessions.length} session{missedSessions.length > 1 ? 's were' : ' was'} not started
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5 line-clamp-2">
+                {missedSessions.length === 1
+                  ? `"${missedSessions[0].groups?.courses?.name}" on ${new Date(missedSessions[0].scheduled_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} was scheduled but never started.`
+                  : `${missedSessions.length} scheduled sessions passed their start time without being started.`}
+                {' '}Students were unable to join. Please mark them as cancelled or reschedule.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/teacher/sessions"
+            className="flex-shrink-0 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+          >
+            View →
+          </Link>
+        </div>
+      )}
 
       {/* ── Main content grid ── */}
       <div className="grid lg:grid-cols-5 gap-6">

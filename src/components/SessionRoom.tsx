@@ -21,24 +21,23 @@ export type SessionRoomProps = {
   weekTopic: string | null
   nextSessionAt: string | null
   nextSessionToken: string | null
+  sessionNumber: number
+  totalSessions: number
 }
 
 type Phase = 'lobby' | 'call' | 'complete'
 
-// ── Shared Avatar ────────────────────────────────────────────────────────────
-
-function Avatar({ name, role }: { name: string; role?: string }) {
-  const isTeacher = role?.toLowerCase() === 'teacher'
+function Avatar({ name, variant = 'default' }: { name: string; variant?: 'teacher' | 'default' }) {
   return (
-    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-white font-black text-sm uppercase shadow-lg shadow-indigo-500/10 ${
-      isTeacher ? 'bg-gradient-to-br from-indigo-500 to-purple-600' : 'bg-slate-800'
+    <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm uppercase flex-shrink-0 ${
+      variant === 'teacher'
+        ? 'bg-gradient-to-br from-[#6c4ff5] to-purple-600'
+        : 'bg-gradient-to-br from-blue-400 to-indigo-500'
     }`}>
       {name.charAt(0)}
     </div>
   )
 }
-
-// ── Lobby Preview ────────────────────────────────────────────────────────────
 
 function PreviewVideo() {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -85,43 +84,41 @@ function PreviewVideo() {
   }, [])
 
   return (
-    <div className="space-y-6">
-      <div className="relative aspect-video bg-slate-900 rounded-[2.5rem] overflow-hidden shadow-2xl border border-white/5">
+    <div className="space-y-3">
+      <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden">
         {camOk === false && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500">
-            <span className="text-4xl mb-4">📵</span>
-            <p className="text-sm font-black uppercase tracking-widest">Camera Denied</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
+            <span className="text-3xl">📵</span>
+            <p className="text-sm font-semibold text-gray-400">Camera denied</p>
           </div>
         )}
         <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
         {camOk && (
-          <div className="absolute bottom-6 left-6 bg-black/40 backdrop-blur-xl text-white text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-2xl border border-white/10 flex items-center gap-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+          <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
             Live Preview
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-4 px-6 py-4 bg-slate-50 rounded-3xl border border-slate-100">
-        <span className="text-sm">🎙️</span>
-        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">
+        <span className="text-base">🎙️</span>
+        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
           <div
-            className="h-2 rounded-full transition-all duration-100 ease-out"
+            className="h-1.5 rounded-full transition-all duration-100"
             style={{
               width: `${micLevel * 100}%`,
-              background: micLevel > 0.8 ? '#ef4444' : '#6366f1',
+              background: micLevel > 0.8 ? '#ef4444' : '#6c4ff5',
             }}
           />
         </div>
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          {camOk === null ? 'Syncing...' : camOk ? 'Mic Active' : 'No Input'}
+        <span className="text-xs font-semibold text-gray-400">
+          {camOk === null ? 'Checking...' : camOk ? 'Mic active' : 'No input'}
         </span>
       </div>
     </div>
   )
 }
-
-// ── Post-call Rating ──
 
 function PostCallScreen({
   courseId, teacherId, courseName,
@@ -152,38 +149,38 @@ function PostCallScreen({
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center p-6 font-sans">
-      <div className="max-w-xl w-full space-y-8 animate-in fade-in zoom-in duration-700">
-        <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-2xl shadow-indigo-500/10 p-12 text-center">
-          <div className="w-24 h-24 bg-brand-50 rounded-[2.5rem] flex items-center justify-center text-4xl mx-auto mb-8 shadow-xl shadow-brand-500/10">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+          <div className="w-16 h-16 bg-purple-50 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6">
             {submitted ? '✨' : '🎉'}
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-4">
-            {submitted ? 'Feedback Received' : 'Class Complete!'}
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {submitted ? 'Feedback received' : 'Session complete!'}
           </h1>
-          <p className="text-slate-500 font-medium leading-relaxed max-w-sm mx-auto">
+          <p className="text-gray-500 text-sm leading-relaxed">
             {submitted
-              ? 'Thank you for helping us maintain the highest standards of learning.'
-              : `You just finished your session in ${courseName}. How was your experience with the teacher?`}
+              ? 'Thank you for helping us maintain high teaching standards.'
+              : `You just finished ${courseName}. How was your experience?`}
           </p>
 
           {!submitted && (
-            <div className="mt-12 space-y-10">
-              <div className="flex gap-3 justify-center">
+            <div className="mt-8 space-y-6">
+              <div className="flex gap-2 justify-center">
                 {[1, 2, 3, 4, 5].map(n => (
                   <button
                     key={n}
                     onMouseEnter={() => setHover(n)}
                     onMouseLeave={() => setHover(0)}
                     onClick={() => setRating(n)}
-                    className="group relative transition-all active:scale-90"
+                    className="relative transition-transform active:scale-90"
                   >
-                    <span className={`text-4xl transition-all duration-300 ${
-                      n <= (hover || rating) ? 'opacity-100 scale-110' : 'opacity-20 grayscale'
+                    <span className={`text-3xl transition-all duration-200 ${
+                      n <= (hover || rating) ? 'opacity-100 scale-110' : 'opacity-25 grayscale'
                     }`}>⭐</span>
                     {n === (hover || rating) && (
-                      <span className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg">
-                        {['', 'Poor', 'Fair', 'Good', 'Great', 'Masterful'][n]}
+                      <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded-lg whitespace-nowrap">
+                        {['', 'Poor', 'Fair', 'Good', 'Great', 'Excellent'][n]}
                       </span>
                     )}
                   </button>
@@ -195,18 +192,18 @@ function PostCallScreen({
                 onChange={e => setBody(e.target.value)}
                 placeholder="Share your thoughts on today's lesson..."
                 rows={3}
-                className="w-full bg-slate-50 border-none rounded-[2rem] px-8 py-6 text-slate-900 font-bold placeholder-slate-300 focus:ring-2 focus:ring-brand-500 transition-all resize-none"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#6c4ff5] resize-none"
               />
 
-              <div className="pt-4 flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <button
                   onClick={submit}
                   disabled={rating === 0 || isPending}
-                  className="w-full bg-brand-500 text-white font-black py-5 rounded-[2rem] shadow-2xl shadow-brand-500/30 hover:bg-brand-600 transition-all disabled:opacity-30 active:scale-95"
+                  className="w-full bg-[#6c4ff5] hover:bg-[#5c3de8] text-white font-semibold py-3 rounded-xl transition-colors disabled:opacity-30"
                 >
-                  {isPending ? 'Syncing Feedback...' : 'Submit Review'}
+                  {isPending ? 'Submitting...' : 'Submit Review'}
                 </button>
-                <button onClick={() => setSubmitted(true)} className="text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors">
+                <button onClick={() => setSubmitted(true)} className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors py-1">
                   Skip for now
                 </button>
               </div>
@@ -214,34 +211,41 @@ function PostCallScreen({
           )}
 
           {submitted && (
-            <div className="mt-12 space-y-4">
-              <Link href="/student/dashboard" className="block w-full bg-slate-900 text-white font-black py-5 rounded-[2rem] hover:bg-slate-800 transition-all active:scale-95">
-                Back to Home
+            <div className="mt-8 flex flex-col gap-3">
+              <Link href="/student/dashboard" className="block w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3 rounded-xl text-center transition-colors">
+                Back to Dashboard
               </Link>
-              <Link href="/student/sessions" className="block text-xs font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 py-2">
-                View Learning History →
+              <Link href="/student/sessions" className="text-xs font-semibold text-gray-400 hover:text-gray-600 py-1 text-center">
+                View learning history →
               </Link>
             </div>
           )}
         </div>
 
         {submitted && nextSessionAt && (
-           <div className="bg-indigo-600 rounded-[3rem] p-8 text-white shadow-2xl shadow-indigo-600/20 flex items-center justify-between animate-in slide-in-from-bottom-8 duration-700">
-              <div>
-                <p className="text-indigo-200 text-[10px] font-black uppercase tracking-widest mb-2">Next Milestone</p>
-                <p className="text-xl font-black">{formatNext(nextSessionAt)}</p>
-              </div>
-              <Link href={`/student/session/${nextSessionToken}`} className="bg-white/20 hover:bg-white/30 backdrop-blur-xl text-white font-black px-6 py-3 rounded-2xl border border-white/10 text-xs uppercase tracking-widest transition-all">
-                Preview
-              </Link>
-           </div>
+          <div className="bg-[#6c4ff5] rounded-2xl p-5 text-white flex items-center justify-between gap-4">
+            <div>
+              <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider mb-1">Next Session</p>
+              <p className="font-bold">{formatNext(nextSessionAt)}</p>
+            </div>
+            <Link
+              href={`/student/session/${nextSessionToken}`}
+              className="bg-white/20 hover:bg-white/30 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-colors whitespace-nowrap"
+            >
+              Preview
+            </Link>
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-// ── Main SessionRoom ──
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
 
 export default function SessionRoom({
   roomToken, sessionId, userId, userName,
@@ -249,6 +253,7 @@ export default function SessionRoom({
   scheduledAt, durationMinutes, prepNotes,
   weekNumber, weekTopic,
   nextSessionAt, nextSessionToken,
+  sessionNumber, totalSessions,
 }: SessionRoomProps) {
   const [phase, setPhase] = useState<Phase>('lobby')
 
@@ -282,100 +287,137 @@ export default function SessionRoom({
     )
   }
 
+  const participants = [
+    { name: userName, role: 'Student (You)', variant: 'default' as const },
+    teacherName ? { name: teacherName, role: 'Teacher', variant: 'teacher' as const } : null,
+    partnerName ? { name: partnerName, role: 'Learning Partner', variant: 'default' as const } : null,
+  ].filter(Boolean) as { name: string; role: string; variant: 'teacher' | 'default' }[]
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] py-12 px-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center gap-4 mb-10">
-          <Link href="/student/sessions" className="w-10 h-10 bg-white border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm">
-            ←
-          </Link>
-          <div>
-             <h2 className="text-2xl font-black text-slate-900 tracking-tight">Pre-class Lobby</h2>
-             <p className="text-slate-400 text-sm font-medium">Verify your setup and meet your teacher.</p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/student/sessions"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              ←
+            </Link>
+            <span className="font-bold text-[#6c4ff5]">LangMaster</span>
+            <span className="hidden sm:inline text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Pre-Class Lobby</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold uppercase">
+              {userName.charAt(0)}
+            </div>
+            <span className="hidden sm:block text-sm font-medium text-gray-700">{userName}</span>
           </div>
         </div>
+      </header>
 
-        <div className="grid lg:grid-cols-[1fr_400px] gap-12">
-          
-          <div className="space-y-10">
-             {/* Header Info */}
-             <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-2xl shadow-indigo-600/20 relative overflow-hidden">
-                <div className="relative z-10">
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="px-3 py-1 bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest">Week {weekNumber}</span>
-                    <span className="text-white/40">•</span>
-                    <span className="text-indigo-100 font-bold text-sm">{scheduledTime}</span>
-                  </div>
-                  <h1 className="text-4xl font-black tracking-tight mb-2">{courseName}</h1>
-                  <p className="text-indigo-200 font-medium italic">“{weekTopic ?? 'Open Conversation & Fluency Practice'}”</p>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+        <div className="grid lg:grid-cols-[1fr_340px] gap-6">
+
+          {/* Left column */}
+          <div className="space-y-5">
+
+            {/* Course Info */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <span className="text-xs font-semibold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">
+                  {ordinal(weekNumber)} Week
+                </span>
+                <span className="text-xs font-semibold bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full">
+                  Session {sessionNumber} of {totalSessions}
+                </span>
+                <span className="text-xs text-gray-400">{scheduledTime}</span>
+              </div>
+              <h1 className="text-xl font-bold text-gray-900">{courseName}</h1>
+              {weekTopic && (
+                <p className="text-sm text-gray-500 mt-1 italic">&ldquo;{weekTopic}&rdquo;</p>
+              )}
+            </div>
+
+            {/* Tech Check */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-gray-900">Tech Check</h2>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  <span className="text-xs font-semibold text-gray-400">Hardware ready</span>
                 </div>
-                <div className="absolute -right-20 -bottom-20 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
-             </div>
+              </div>
+              <PreviewVideo />
+            </div>
 
-             {/* Device Check */}
-             <div className="bg-white rounded-[3.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 p-10">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-xl font-black text-slate-900 tracking-tight">Tech Check</h3>
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hardware Ready</span>
-                  </div>
+            {/* Prep Notes */}
+            {prepNotes && (
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-9 h-9 bg-amber-50 rounded-xl flex items-center justify-center text-lg flex-shrink-0">📝</div>
+                  <h2 className="font-bold text-gray-900">Prep for Today</h2>
                 </div>
-                <PreviewVideo />
-             </div>
-
-             {/* Teacher Notes */}
-             {prepNotes && (
-               <div className="bg-white rounded-[3rem] border border-slate-100 p-10 shadow-xl shadow-slate-200/50">
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">📝</div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Prep for Today</h3>
-                  </div>
-                  <div className="bg-slate-50 rounded-3xl p-8">
-                    <p className="text-slate-600 font-bold leading-relaxed">{prepNotes}</p>
-                  </div>
-               </div>
-             )}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <p className="text-sm text-gray-600 leading-relaxed">{prepNotes}</p>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-10">
-             {/* Participants */}
-             <div className="bg-white rounded-[3rem] p-10 border border-slate-100 shadow-2xl shadow-indigo-500/10 text-center">
-                <h3 className="font-black text-slate-900 text-xs uppercase tracking-widest mb-10">Who&apos;s in the Room</h3>
-                <div className="flex flex-col gap-6">
-                  {[
-                    { name: userName, role: 'Student (You)', profile: 'me' },
-                    { name: teacherName ?? 'Teacher', role: 'Teacher', profile: 'teacher' },
-                    { name: partnerName, role: 'Learning Partner', profile: 'partner' }
-                  ].filter(p => p.name).map(p => (
-                    <div key={p.role} className="flex items-center gap-4 text-left group">
-                      <Avatar name={p.name!} role={p.profile === 'teacher' ? 'teacher' : ''} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black text-slate-900 truncate group-hover:text-brand-500 transition-colors">{p.name}</p>
-                        <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{p.role}</p>
-                      </div>
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-200" />
-                    </div>
-                  ))}
-                </div>
-             </div>
+          {/* Right column */}
+          <div className="space-y-5">
 
-             {/* Final CTA */}
-             <div className="bg-white rounded-[3.5rem] p-10 border border-slate-100 shadow-2xl shadow-indigo-500/10 flex flex-col items-center text-center">
-                <div className="w-20 h-20 bg-brand-50 rounded-[2.5rem] flex items-center justify-center text-3xl mb-8 animate-bounce shadow-xl shadow-brand-500/10">
-                  🎙️
+            {/* Participants */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+              <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Who&apos;s in the Room</h2>
+              <div className="space-y-3">
+                {participants.map(p => (
+                  <div key={p.role} className="flex items-center gap-3">
+                    <Avatar name={p.name} variant={p.variant} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
+                      <p className="text-xs text-gray-400">{p.role}</p>
+                    </div>
+                    <span className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center text-center">
+              <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-2xl mb-4">
+                🎙️
+              </div>
+              <h2 className="font-bold text-gray-900 mb-1">Ready to Speak?</h2>
+              <p className="text-sm text-gray-500 leading-relaxed mb-6">
+                Your teacher and classmates are waiting in the classroom.
+              </p>
+              <button
+                onClick={() => setPhase('call')}
+                className="w-full py-3 bg-[#6c4ff5] hover:bg-[#5c3de8] text-white font-semibold rounded-xl shadow-md shadow-purple-200 transition-colors active:scale-95"
+              >
+                Enter Classroom
+              </button>
+            </div>
+
+            {/* Duration info */}
+            <div className="bg-gray-50 rounded-2xl border border-gray-100 p-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-500">Session duration</span>
+                <span className="font-semibold text-gray-700">{durationMinutes} min</span>
+              </div>
+              {nextSessionAt && (
+                <div className="flex items-center justify-between text-sm mt-2 pt-2 border-t border-gray-100">
+                  <span className="text-gray-500">Next session</span>
+                  <span className="font-semibold text-gray-700">
+                    {new Date(nextSessionAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
                 </div>
-                <h3 className="text-xl font-black text-slate-900 tracking-tight mb-2">Ready to Speak?</h3>
-                <p className="text-slate-400 text-sm font-medium leading-relaxed mb-10 px-4">
-                  Everything is set. Your teacher and classmates are waiting for you in the classroom.
-                </p>
-                <button
-                  onClick={() => setPhase('call')}
-                  className="w-full py-6 bg-brand-500 hover:bg-brand-600 text-white font-black text-sm uppercase tracking-widest rounded-[2.5rem] shadow-[0_20px_50px_rgba(99,102,241,0.4)] transition-all active:scale-95"
-                >
-                  Enter Classroom
-                </button>
-             </div>
+              )}
+            </div>
           </div>
 
         </div>

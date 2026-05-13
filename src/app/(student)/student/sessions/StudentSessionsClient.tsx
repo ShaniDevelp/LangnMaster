@@ -1,7 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { Session, Group, Course, Profile } from '@/lib/supabase/types'
+
+type TeacherProfile = Pick<Profile, 'id' | 'name' | 'avatar_url'> & {
+  bio?: string | null
+  years_experience?: number | null
+  languages_taught?: { lang: string; proficiency: string }[] | null
+}
 
 type SessionRow = Session & {
   topic?: string | null
@@ -10,9 +16,31 @@ type SessionRow = Session & {
   homework_text?: string | null
   homework_url?: string | null
   groups: (Group & {
-    courses: Pick<Course, 'name' | 'language' | 'level'> | null
-    profiles: Pick<Profile, 'name' | 'avatar_url'> | null
+    week_start?: string | null
+    courses: Pick<Course, 'name' | 'language' | 'level' | 'sessions_per_week' | 'duration_weeks'> | null
+    profiles: TeacherProfile | null
   }) | null
+}
+
+function ordinal(n: number) {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
+}
+
+function buildSessionMeta(sessions: SessionRow[]) {
+  const byGroup = new Map<string, SessionRow[]>()
+  for (const s of sessions) {
+    const list = byGroup.get(s.group_id) ?? []
+    list.push(s)
+    byGroup.set(s.group_id, list)
+  }
+  const indexMap = new Map<string, number>()
+  for (const [, list] of byGroup) {
+    list.sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+    list.forEach((s, i) => indexMap.set(s.id, i + 1))
+  }
+  return indexMap
 }
 
 const LANG_EMOJI: Record<string, string> = {
@@ -40,122 +68,205 @@ function timeUntil(iso: string, nowMs: number) {
 export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming')
   const [selectedSession, setSelectedSession] = useState<SessionRow | null>(null)
-  
-  const nowMs = new Date().getTime()
-  const upcoming = sessions.filter(s => s.status === 'scheduled' || s.status === 'active')
+
+  const sessionIndexMap = useMemo(() => buildSessionMeta(sessions), [sessions])
+  const nowMs = Date.now()
+  const missed = sessions
+    .filter(s => s.status === 'scheduled' && new Date(s.scheduled_at).getTime() < nowMs)
+    .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
+  const upcoming = sessions
+    .filter(s => s.status === 'active' || (s.status === 'scheduled' && new Date(s.scheduled_at).getTime() >= nowMs))
     .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-  const completed = sessions.filter(s => s.status === 'completed' || s.status === 'cancelled')
+  const completed = sessions
+    .filter(s => s.status === 'completed' || s.status === 'cancelled')
     .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime())
 
   const activeSessions = activeTab === 'upcoming' ? upcoming : completed
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Tab Switcher */}
-      <div className="flex p-1 bg-gray-100 rounded-2xl w-full sm:w-fit overflow-hidden">
-        <button
-          onClick={() => setActiveTab('upcoming')}
-          className={`flex-1 sm:flex-none px-6 sm:px-10 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-            activeTab === 'upcoming' 
-              ? 'bg-white text-gray-900 shadow-sm' 
-              : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          Upcoming
-        </button>
-        <button
-          onClick={() => setActiveTab('completed')}
-          className={`flex-1 sm:flex-none px-6 sm:px-10 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-            activeTab === 'completed' 
-              ? 'bg-white text-gray-900 shadow-sm' 
-              : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          Completed
-        </button>
+      <div className="flex p-1 bg-gray-100 rounded-xl w-full sm:w-fit">
+        {(['upcoming', 'completed'] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 sm:flex-none px-6 py-2 rounded-lg text-sm font-semibold transition-all capitalize ${
+              activeTab === tab
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
 
-      {activeSessions.length === 0 ? (
-        <div className="bg-white rounded-3xl p-16 border border-dashed border-gray-200 text-center animate-in fade-in zoom-in duration-500">
-          <p className="text-5xl mb-6">{activeTab === 'upcoming' ? '📅' : '🏁'}</p>
-          <p className="text-xl font-bold text-gray-800">
+      {/* Missed sessions banner — only shown in upcoming tab */}
+      {activeTab === 'upcoming' && missed.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
+          <span className="text-xl flex-shrink-0">⚠️</span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-amber-800 text-sm">
+              {missed.length} session{missed.length > 1 ? 's' : ''} missed
+            </p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              {missed.length > 1
+                ? `${missed.length} scheduled sessions passed without being completed.`
+                : `"${missed[0].groups?.courses?.name}" on ${fmt(missed[0].scheduled_at)} was not completed.`}
+              {' '}Contact your teacher if you need to reschedule.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Missed session cards — shown above upcoming */}
+      {activeTab === 'upcoming' && missed.length > 0 && (
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider">Missed Sessions</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {missed.map(s => {
+              const lang = s.groups?.courses?.language ?? ''
+              return (
+                <div key={s.id} className="bg-white rounded-2xl border border-amber-200 shadow-sm overflow-hidden flex flex-col opacity-80">
+                  <div className="h-1 bg-amber-300" />
+                  <div className="p-5 flex flex-col flex-1">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 flex items-center justify-center text-xl">
+                        {LANG_EMOJI[lang] ?? '📅'}
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">
+                        Missed
+                      </span>
+                    </div>
+                    <div className="mb-4">
+                      <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">
+                        {s.groups?.courses?.name}
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {s.groups?.courses?.level} · {s.groups?.profiles?.name ?? 'Teacher'}
+                      </p>
+                    </div>
+                    <div className="mt-auto pt-4 border-t border-gray-100 space-y-3">
+                      <div className="flex items-start gap-2 text-gray-600">
+                        <span className="text-sm mt-0.5">🕒</span>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-900">{fmt(s.scheduled_at)}</p>
+                          <p className="text-xs text-amber-500 mt-0.5 font-semibold">Session time has passed</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSelectedSession(s)}
+                          className="flex-1 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors"
+                        >
+                          Details
+                        </button>
+                        <div className="flex-1 px-3 py-2 rounded-xl bg-gray-100 text-gray-400 font-semibold text-xs text-center cursor-not-allowed">
+                          Can&apos;t Join
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeSessions.length === 0 && !(activeTab === 'upcoming' && missed.length > 0) ? (
+        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-12 text-center">
+          <p className="text-4xl mb-4">{activeTab === 'upcoming' ? '📅' : '🏁'}</p>
+          <p className="font-bold text-gray-700 mb-1">
             {activeTab === 'upcoming' ? 'No upcoming sessions' : 'No completed sessions yet'}
           </p>
-          <p className="text-gray-400 mt-2 max-w-xs mx-auto">
-            {activeTab === 'upcoming' 
-              ? 'When your course begins, you will see your scheduled meetings here.' 
-              : 'Sessions you attend will appear here with your homework and recordings.'}
+          <p className="text-sm text-gray-400 max-w-xs mx-auto">
+            {activeTab === 'upcoming'
+              ? 'When your course begins, sessions will appear here.'
+              : 'Sessions you attend will show here with homework and materials.'}
           </p>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
+      ) : activeSessions.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {activeSessions.map((s, i) => {
             const lang = s.groups?.courses?.language ?? ''
             const isActive = s.status === 'active'
             const msUntil = new Date(s.scheduled_at).getTime() - nowMs
-            const joinable = isActive || msUntil < 15 * 60_000 // 15 min early
+            const joinable = isActive || msUntil < 15 * 60_000
             const isNext = activeTab === 'upcoming' && i === 0
 
             return (
-              <div 
-                key={s.id} 
-                className={`group bg-white rounded-3xl border transition-all duration-300 hover:shadow-lg overflow-hidden flex flex-col ${
-                  isNext ? 'border-brand-200 ring-4 ring-brand-50/50' : 'border-gray-100 hover:border-brand-200'
+              <div
+                key={s.id}
+                className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col transition-shadow hover:shadow-md ${
+                  isNext ? 'border-purple-200' : 'border-gray-100'
                 }`}
               >
-                {/* Accent line */}
-                <div className={`h-1.5 bg-gradient-to-r ${isNext ? 'from-brand-400 to-brand-600' : 'from-gray-100 to-gray-200'}`} />
-                
-                <div className="p-5 sm:p-6 flex flex-col flex-1">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center text-xl shadow-sm border border-gray-100 group-hover:bg-brand-50 group-hover:border-brand-100 transition-colors">
+                {/* Top accent */}
+                <div className={`h-1 ${isNext ? 'bg-[#6c4ff5]' : 'bg-gray-100'}`} />
+
+                <div className="p-5 flex flex-col flex-1">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-xl">
                       {LANG_EMOJI[lang] ?? '📅'}
                     </div>
-                    {isActive ? (
-                      <span className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-red-100 text-red-600 text-[9px] font-black uppercase tracking-widest animate-pulse">
-                        <span className="w-1.5 h-1.5 bg-red-600 rounded-full" />
-                        LIVE
-                      </span>
-                    ) : isNext ? (
-                      <span className="px-2 py-1 rounded-lg bg-brand-100 text-brand-600 text-[9px] font-black uppercase tracking-widest">
-                        NEXT
-                      </span>
-                    ) : null}
+                    <div className="flex flex-col items-end gap-1.5">
+                      {isActive && (
+                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-semibold animate-pulse">
+                          <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
+                          Live
+                        </span>
+                      )}
+                      {isNext && !isActive && (
+                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                          Next
+                        </span>
+                      )}
+                      {s.status === 'completed' && (
+                        <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-semibold">
+                          Done
+                        </span>
+                      )}
+                      {s.status === 'cancelled' && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-semibold">
+                          Cancelled
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="mb-4">
-                    <h3 className="font-bold text-gray-900 text-sm sm:text-base leading-snug group-hover:text-brand-600 transition-colors line-clamp-2">
+                    <h3 className="font-bold text-gray-900 text-sm leading-snug line-clamp-2">
                       {s.groups?.courses?.name}
                     </h3>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">
+                    <p className="text-xs text-gray-400 mt-0.5">
                       {s.groups?.courses?.level} · {s.groups?.profiles?.name ?? 'Teacher'}
                     </p>
                   </div>
 
-                  <div className="mt-auto pt-4 border-t border-gray-50 space-y-3">
-                    <div className="flex items-center gap-3 text-gray-600">
-                      <span className="text-base flex-shrink-0">🕒</span>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-900 truncate">{fmt(s.scheduled_at)}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5 truncate uppercase">
-                          {s.duration_minutes}m · {timeUntil(s.scheduled_at, nowMs)}
-                        </p>
+                  <div className="mt-auto pt-4 border-t border-gray-100 space-y-3">
+                    <div className="flex items-start gap-2 text-gray-600">
+                      <span className="text-sm mt-0.5">🕒</span>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900">{fmt(s.scheduled_at)}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{s.duration_minutes}m · {timeUntil(s.scheduled_at, nowMs)}</p>
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-1">
+                    <div className="flex gap-2">
                       <button
                         onClick={() => setSelectedSession(s)}
-                        className="flex-1 px-3 py-2.5 rounded-xl bg-gray-50 text-gray-700 font-bold text-xs hover:bg-gray-100 transition-all active:scale-95 border border-gray-100"
+                        className="flex-1 px-3 py-2 rounded-xl bg-gray-50 border border-gray-100 text-gray-700 font-semibold text-xs hover:bg-gray-100 transition-colors"
                       >
                         Details
                       </button>
                       {activeTab === 'upcoming' && (
                         <Link
                           href={`/student/session/${s.room_token}`}
-                          className={`flex-1 px-3 py-2.5 rounded-xl font-bold text-xs text-center transition-all active:scale-95 ${
-                            joinable 
-                              ? 'bg-brand-500 text-white hover:bg-brand-600 shadow-sm shadow-brand-200' 
+                          className={`flex-1 px-3 py-2 rounded-xl font-semibold text-xs text-center transition-colors ${
+                            joinable
+                              ? 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8]'
                               : 'bg-gray-100 text-gray-400 pointer-events-none'
                           }`}
                         >
@@ -169,190 +280,218 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
             )
           })}
         </div>
-      )}
+      ) : null}
 
-      {/* Detail Modal */}
       {selectedSession && (
-        <SessionDetailModal 
-          session={selectedSession} 
-          onClose={() => setSelectedSession(null)} 
+        <SessionDetailModal
+          session={selectedSession}
+          onClose={() => setSelectedSession(null)}
           nowMs={nowMs}
+          sessionNumber={sessionIndexMap.get(selectedSession.id) ?? 1}
         />
       )}
     </div>
   )
 }
 
-function SessionDetailModal({ session, onClose, nowMs }: { session: SessionRow; onClose: () => void; nowMs: number }) {
+function SessionDetailModal({
+  session, onClose, nowMs, sessionNumber,
+}: {
+  session: SessionRow
+  onClose: () => void
+  nowMs: number
+  sessionNumber: number
+}) {
   const isCompleted = session.status === 'completed'
-  const isUpcoming = session.status === 'scheduled' || session.status === 'active'
+  const isMissed = session.status === 'scheduled' && new Date(session.scheduled_at).getTime() < nowMs
+  const isUpcoming = session.status === 'active' || (session.status === 'scheduled' && !isMissed)
   const lang = session.groups?.courses?.language ?? ''
-  
   const msUntil = new Date(session.scheduled_at).getTime() - nowMs
   const joinable = isUpcoming && (session.status === 'active' || msUntil < 15 * 60_000)
 
+  const weekStart = session.groups?.week_start
+  const weekNumber = weekStart
+    ? Math.max(1, Math.floor((new Date(session.scheduled_at).getTime() - new Date(weekStart).getTime()) / (7 * 86_400_000)) + 1)
+    : null
+  const totalSessions = (session.groups?.courses?.sessions_per_week ?? 1) * (session.groups?.courses?.duration_weeks ?? 1)
+  const teacher = session.groups?.profiles ?? null
+
   return (
-    <div 
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-300"
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
+      <div
+        className="bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="relative h-40 bg-gradient-to-br from-indigo-600 to-purple-700 p-8 flex flex-col justify-end">
-          <button 
-            onClick={onClose}
-            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all"
-          >
-            ✕
-          </button>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl shadow-xl">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-xl">
               {LANG_EMOJI[lang] ?? '📅'}
             </div>
             <div>
-              <h2 className="text-2xl font-black text-white">{session.groups?.courses?.name}</h2>
-              <p className="text-white/70 text-sm font-bold uppercase tracking-widest">
-                Session with {session.groups?.profiles?.name ?? 'Teacher'}
-              </p>
+              <h2 className="font-bold text-gray-900 text-base">{session.groups?.courses?.name}</h2>
+              <p className="text-xs text-gray-400">{session.groups?.courses?.level} · {lang}</p>
             </div>
           </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
-          {/* Time and Info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-3xl p-5 border border-gray-100">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Scheduled At</p>
-              <p className="text-sm font-bold text-gray-900">{fmt(session.scheduled_at)}</p>
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Meta grid */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 col-span-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Scheduled</p>
+              <p className="text-sm font-semibold text-gray-900">{fmt(session.scheduled_at)}</p>
             </div>
-            <div className="bg-gray-50 rounded-3xl p-5 border border-gray-100">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Duration</p>
-              <p className="text-sm font-bold text-gray-900">{session.duration_minutes} Minutes</p>
+            <div className="bg-purple-50 rounded-xl border border-purple-100 p-3">
+              <p className="text-xs font-semibold text-purple-400 uppercase tracking-wider mb-1">Week</p>
+              <p className="text-sm font-bold text-purple-800">
+                {weekNumber ? `${ordinal(weekNumber)} Week` : '—'}
+              </p>
+            </div>
+            <div className="bg-blue-50 rounded-xl border border-blue-100 p-3">
+              <p className="text-xs font-semibold text-blue-400 uppercase tracking-wider mb-1">Session</p>
+              <p className="text-sm font-bold text-blue-800">{sessionNumber} of {totalSessions}</p>
             </div>
           </div>
 
-          {/* Status Specific Content */}
+          {/* Teacher info */}
+          {teacher && (
+            <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Teacher</p>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6c4ff5] to-purple-600 flex items-center justify-center text-white font-bold text-sm uppercase flex-shrink-0">
+                  {teacher.name?.charAt(0) ?? 'T'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{teacher.name}</p>
+                  {teacher.years_experience != null && (
+                    <p className="text-xs text-gray-500 mt-0.5">{teacher.years_experience} yr{teacher.years_experience !== 1 ? 's' : ''} experience</p>
+                  )}
+                  {teacher.bio && (
+                    <p className="text-xs text-gray-500 mt-1.5 leading-relaxed line-clamp-2">{teacher.bio}</p>
+                  )}
+                  {teacher.languages_taught && teacher.languages_taught.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {teacher.languages_taught.map((l, i) => (
+                        <span key={i} className="text-[10px] font-semibold bg-white border border-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                          {l.lang}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {isCompleted ? (
-            <div className="space-y-8">
+            <div className="space-y-4">
               {/* Homework */}
-              <section className="bg-brand-50 rounded-[2rem] p-6 border border-brand-100">
-                <h3 className="text-brand-800 font-black text-lg mb-4 flex items-center gap-2">
-                  <span className="w-1.5 h-6 bg-brand-500 rounded-full" />
-                  Your Homework
-                </h3>
+              <section className="bg-purple-50 rounded-xl border border-purple-100 p-4">
+                <h3 className="font-bold text-purple-900 mb-2 text-sm">Homework</h3>
                 {session.homework_text ? (
-                  <div className="space-y-4">
-                    <p className="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">
-                      {session.homework_text}
-                    </p>
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{session.homework_text}</p>
                     {session.homework_url && (
-                      <a 
-                        href={session.homework_url} 
-                        target="_blank" 
+                      <a
+                        href={session.homework_url}
+                        target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 px-6 py-3 bg-brand-600 text-white rounded-2xl font-bold text-sm hover:bg-brand-500 transition-all shadow-lg shadow-brand-100"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-[#6c4ff5] text-white rounded-xl font-semibold text-xs hover:bg-[#5c3de8] transition-colors"
                       >
                         🔗 Open Resource
                       </a>
                     )}
                   </div>
                 ) : (
-                  <p className="text-brand-400 italic text-sm">No homework was assigned for this session.</p>
+                  <p className="text-sm text-purple-400 italic">No homework assigned.</p>
                 )}
               </section>
 
-              {/* Session Summary */}
               {session.topic && (
-                <section>
-                  <h3 className="text-gray-900 font-black text-lg mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-purple-500 rounded-full" />
-                    Topic Covered
-                  </h3>
-                  <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-                    <p className="text-gray-800 font-bold">{session.topic}</p>
-                  </div>
+                <section className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                  <h3 className="font-bold text-gray-700 mb-2 text-sm">Topic Covered</h3>
+                  <p className="text-sm text-gray-800">{session.topic}</p>
                 </section>
               )}
 
               {session.recording_url && (
-                <section>
-                  <h3 className="text-gray-900 font-black text-lg mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-emerald-500 rounded-full" />
-                    Session Recording
-                  </h3>
-                  <a 
-                    href={session.recording_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-4 bg-emerald-50 p-5 rounded-2xl border border-emerald-100 group hover:bg-emerald-100 transition-all"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-emerald-500 text-white flex items-center justify-center text-xl shadow-lg group-hover:scale-110 transition-transform">
-                      ▶
-                    </div>
-                    <div>
-                      <p className="font-bold text-emerald-900">Watch the replay</p>
-                      <p className="text-xs text-emerald-600">Review your conversation and practice again.</p>
-                    </div>
-                  </a>
-                </section>
+                <a
+                  href={session.recording_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl p-4 hover:bg-green-100 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center flex-shrink-0">▶</div>
+                  <div>
+                    <p className="font-semibold text-green-900 text-sm">Watch replay</p>
+                    <p className="text-xs text-green-600">Review your conversation</p>
+                  </div>
+                </a>
               )}
             </div>
-          ) : (
-            <div className="space-y-8">
-              {/* Topic Prep */}
+          ) : isMissed ? (
+            <div className="space-y-4">
               {session.topic && (
-                <section>
-                  <h3 className="text-gray-900 font-black text-lg mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-brand-500 rounded-full" />
-                    Upcoming Topic
-                  </h3>
-                  <div className="bg-brand-50 rounded-2xl p-5 border border-brand-100">
-                    <p className="text-brand-900 font-bold">{session.topic}</p>
-                    <p className="text-xs text-brand-600 mt-1">Get ready for our conversation about this!</p>
-                  </div>
+                <section className="bg-purple-50 rounded-xl border border-purple-100 p-4">
+                  <h3 className="font-bold text-purple-900 mb-1 text-sm">Planned Topic</h3>
+                  <p className="text-sm text-purple-800">{session.topic}</p>
+                </section>
+              )}
+              <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-center">
+                <p className="text-2xl mb-2">😔</p>
+                <p className="text-sm font-bold text-amber-800 mb-1">Session Missed</p>
+                <p className="text-xs text-amber-700 leading-relaxed">
+                  This session was scheduled for {fmt(session.scheduled_at)} but was not completed. You can no longer join.
+                </p>
+                <p className="text-xs text-amber-600 mt-2">Contact your teacher to reschedule if needed.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {session.topic && (
+                <section className="bg-purple-50 rounded-xl border border-purple-100 p-4">
+                  <h3 className="font-bold text-purple-900 mb-1 text-sm">Upcoming Topic</h3>
+                  <p className="text-sm text-purple-800">{session.topic}</p>
                 </section>
               )}
 
-              {/* Prep Notes */}
               {session.prep_notes && (
-                <section>
-                  <h3 className="text-gray-900 font-black text-lg mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-6 bg-amber-500 rounded-full" />
-                    Teacher Notes
-                  </h3>
-                  <div className="bg-amber-50 rounded-2xl p-6 border border-amber-100">
-                    <p className="text-amber-900 text-sm leading-relaxed italic">
-                      &quot;{session.prep_notes}&quot;
-                    </p>
-                  </div>
+                <section className="bg-amber-50 rounded-xl border border-amber-100 p-4">
+                  <h3 className="font-bold text-amber-800 mb-1 text-sm">Teacher Notes</h3>
+                  <p className="text-sm text-amber-900 italic leading-relaxed">&ldquo;{session.prep_notes}&rdquo;</p>
                 </section>
               )}
 
-              {/* Join CTA */}
-              <div className="bg-gray-900 rounded-[2.5rem] p-8 text-center text-white space-y-6">
-                <div className="text-4xl">🎥</div>
-                <div>
-                  <h4 className="text-xl font-black">Ready to join?</h4>
-                  <p className="text-gray-400 text-sm mt-1">
-                    {joinable 
-                      ? 'The teacher is waiting or the session starts soon.' 
-                      : `This session will be open for joining on ${fmt(session.scheduled_at)}.`}
-                  </p>
-                </div>
+              <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-center">
+                <p className="text-sm font-semibold text-gray-700 mb-1">
+                  {joinable ? 'Room is ready' : 'Opens 15 min before session'}
+                </p>
+                <p className="text-xs text-gray-400 mb-4">
+                  {joinable
+                    ? 'Your teacher is waiting.'
+                    : `Starts ${fmt(session.scheduled_at)}`}
+                </p>
                 {joinable ? (
-                  <Link 
+                  <Link
                     href={`/student/session/${session.room_token}`}
-                    className="block w-full py-4 rounded-2xl bg-brand-500 text-white font-bold text-base hover:bg-brand-400 transition-all shadow-xl shadow-brand-500/20 active:scale-95"
+                    className="inline-block w-full py-2.5 rounded-xl bg-[#6c4ff5] text-white font-semibold text-sm hover:bg-[#5c3de8] transition-colors"
                   >
-                    Join the Session Now
+                    Join Session
                   </Link>
                 ) : (
-                  <div className="py-4 rounded-2xl bg-white/5 border border-white/10 text-white/40 font-bold text-base">
-                    Room Opens Soon
+                  <div className="py-2.5 rounded-xl bg-gray-200 text-gray-400 font-semibold text-sm">
+                    Not yet available
                   </div>
                 )}
               </div>
@@ -361,12 +500,12 @@ function SessionDetailModal({ session, onClose, nowMs }: { session: SessionRow; 
         </div>
 
         {/* Footer */}
-        <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end">
-          <button 
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button
             onClick={onClose}
-            className="px-8 py-3 rounded-2xl bg-white border border-gray-200 text-gray-900 font-bold text-sm hover:bg-gray-100 transition-all active:scale-95"
+            className="px-5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-sm transition-colors"
           >
-            Close Details
+            Close
           </button>
         </div>
       </div>

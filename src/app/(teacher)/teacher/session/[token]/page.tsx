@@ -7,7 +7,8 @@ type SessionWithGroup = Session & {
   topic?: string
   prep_notes?: string
   groups: (Group & {
-    courses: Pick<Course, 'name' | 'language' | 'level'> | null
+    week_start?: string | null
+    courses: Pick<Course, 'name' | 'language' | 'level' | 'sessions_per_week' | 'duration_weeks'> | null
     group_members: (GroupMember & { profiles: Pick<Profile, 'id' | 'name'> | null })[]
   }) | null
 }
@@ -21,7 +22,7 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sessionRaw } = await (supabase as any)
     .from('sessions')
-    .select('*, groups(*, courses(name, language, level), profiles:teacher_id(id, name), group_members(*, profiles:user_id(id, name)))')
+    .select('*, groups(*, week_start, courses(name, language, level, sessions_per_week, duration_weeks), profiles:teacher_id(id, name), group_members(*, profiles:user_id(id, name)))')
     .eq('room_token', token)
     .single()
 
@@ -38,6 +39,21 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
     .map(m => ({ id: m.profiles?.id ?? '', name: m.profiles?.name ?? 'Student' }))
     .filter(s => s.id)
 
+  const weekStart = session.groups?.week_start ?? null
+  const currentWeek = weekStart
+    ? Math.max(1, Math.floor((Date.now() - new Date(weekStart).getTime()) / (7 * 86_400_000)) + 1)
+    : 1
+
+  const groupId = session.group_id
+  const { count: sessionCount } = await supabase
+    .from('sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('group_id', groupId)
+    .lte('scheduled_at', session.scheduled_at)
+
+  const sessionNumber = sessionCount ?? 1
+  const totalSessions = (session.groups?.courses?.sessions_per_week ?? 1) * (session.groups?.courses?.duration_weeks ?? 1)
+
   return (
     <TeacherLobby
       sessionId={session.id}
@@ -49,6 +65,9 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
       userId={user.id}
       userName={profile?.name ?? 'Teacher'}
       students={students}
+      weekNumber={currentWeek}
+      sessionNumber={sessionNumber}
+      totalSessions={totalSessions}
       existingTopic={(session as unknown as Record<string, string>).topic ?? ''}
       existingPrepNotes={(session as unknown as Record<string, string>).prep_notes ?? ''}
     />

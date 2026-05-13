@@ -166,8 +166,10 @@ export default async function StudentDashboard() {
   let groupDetails: GroupDetailRow | null = null
   let partner: PartnerRow | null = null
 
+  let missedSessions: SessionRow[] = []
+
   if (groupIds.length > 0) {
-    const [sessionsRes, completedRes, groupRes] = await Promise.all([
+    const [sessionsRes, completedRes, groupRes, missedRes] = await Promise.all([
       supabase
         .from('sessions')
         .select('*, groups(*, courses(name, language), profiles:teacher_id(name))')
@@ -189,11 +191,20 @@ export default async function StudentDashboard() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      supabase
+        .from('sessions')
+        .select('*, groups(*, courses(name, language), profiles:teacher_id(name))')
+        .in('group_id', groupIds)
+        .eq('status', 'scheduled')
+        .lt('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: false })
+        .limit(5),
     ])
 
     upcomingSessions = (sessionsRes.data ?? []) as unknown as SessionRow[]
     completedCount = completedRes.count ?? 0
     groupDetails = groupRes.data as unknown as GroupDetailRow | null
+    missedSessions = (missedRes.data ?? []) as unknown as SessionRow[]
 
     // Fetch partner if we have a group
     if (groupDetails) {
@@ -262,6 +273,32 @@ export default async function StudentDashboard() {
           <span className="sm:hidden">Browse</span> →
         </Link>
       </div>
+
+      {/* ── Missed sessions alert ──────────────────────────────── */}
+      {missedSessions.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="text-xl flex-shrink-0">⚠️</span>
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-800 text-sm">
+                {missedSessions.length} session{missedSessions.length > 1 ? 's were' : ' was'} missed
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5 line-clamp-2">
+                {missedSessions.length === 1
+                  ? `"${missedSessions[0].groups?.courses?.name}" on ${new Date(missedSessions[0].scheduled_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} passed without being completed.`
+                  : `${missedSessions.map(s => s.groups?.courses?.name).filter(Boolean).join(', ')} — scheduled sessions that were not completed.`}
+                {' '}Contact your teacher if you need to reschedule.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/student/sessions"
+            className="flex-shrink-0 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+          >
+            View →
+          </Link>
+        </div>
+      )}
 
       {/* ── Top section: 2-col on desktop ──────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 lg:gap-6">

@@ -24,7 +24,7 @@ export default async function PostCallPage({ params }: { params: Promise<{ token
   const { data: sessionRaw } = await (supabase as any)
     .from('sessions')
     .select('*, groups(*, courses(name, language, level), profiles:teacher_id(id, name), group_members(*, profiles:user_id(id, name)))')
-    .eq('room_token', token)
+    .or(`room_token.eq.${token},id.eq.${token}`)
     .single()
 
   if (!sessionRaw) notFound()

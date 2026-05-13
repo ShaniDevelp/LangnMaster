@@ -22,7 +22,9 @@ export default async function TeacherSessionsPage() {
         *,
         groups (
           *,
-          courses (name, language, level)
+          week_start,
+          courses (name, language, level, sessions_per_week, duration_weeks),
+          group_members (user_id, profiles:user_id (id, name))
         )
       `)
       .in('group_id', groupIds)
@@ -35,21 +37,21 @@ export default async function TeacherSessionsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Class Schedule</h1>
-          <p className="text-gray-500 font-medium mt-1">
-            Manage your teaching sessions, view student prep materials, and recap class notes.
+          <h1 className="text-2xl font-bold text-gray-900">My Sessions</h1>
+          <p className="text-gray-500 text-sm mt-1">
+            Manage teaching sessions, view prep materials, and recap class notes.
           </p>
         </div>
-        <div className="flex gap-4 text-xs font-bold uppercase tracking-widest">
-          <div className="flex items-center gap-1.5 text-indigo-600">
-            <span className="w-2 h-2 bg-indigo-500 rounded-full" />
-            {upcomingCount} Scheduled
+        <div className="flex items-center gap-4 text-xs font-semibold text-gray-400">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-[#6c4ff5] rounded-full" />
+            <span>{upcomingCount} upcoming</span>
           </div>
-          <div className="flex items-center gap-1.5 text-gray-400">
-            <span className="w-2 h-2 bg-gray-200 rounded-full" />
-            {completedCount} History
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-gray-300 rounded-full" />
+            <span>{completedCount} completed</span>
           </div>
         </div>
       </div>
