@@ -1,5 +1,5 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
 import { saveOnboarding } from '@/lib/student/actions'
 import { AvailabilityPicker } from '@/components/AvailabilityPicker'
@@ -20,26 +20,26 @@ const LEVELS = [
 ]
 
 const TIMEZONES = [
-  { label: 'UTC-8  Pacific (US & Canada)', value: 'America/Los_Angeles' },
-  { label: 'UTC-7  Mountain (US & Canada)', value: 'America/Denver' },
-  { label: 'UTC-6  Central (US & Canada)', value: 'America/Chicago' },
-  { label: 'UTC-5  Eastern (US & Canada)', value: 'America/New_York' },
-  { label: 'UTC-4  Atlantic / Santiago', value: 'America/Halifax' },
-  { label: 'UTC-3  Buenos Aires / São Paulo', value: 'America/Argentina/Buenos_Aires' },
-  { label: 'UTC-1  Azores', value: 'Atlantic/Azores' },
-  { label: 'UTC+0  London / Lisbon (GMT)', value: 'Europe/London' },
-  { label: 'UTC+1  Paris / Berlin / Madrid', value: 'Europe/Paris' },
-  { label: 'UTC+2  Cairo / Athens / Helsinki', value: 'Europe/Helsinki' },
-  { label: 'UTC+3  Moscow / Nairobi / Riyadh', value: 'Europe/Moscow' },
-  { label: 'UTC+4  Dubai / Baku', value: 'Asia/Dubai' },
-  { label: 'UTC+5  Karachi / Tashkent', value: 'Asia/Karachi' },
-  { label: 'UTC+5:30  Mumbai / Delhi', value: 'Asia/Kolkata' },
-  { label: 'UTC+6  Dhaka / Almaty', value: 'Asia/Dhaka' },
-  { label: 'UTC+7  Bangkok / Jakarta / Hanoi', value: 'Asia/Bangkok' },
-  { label: 'UTC+8  Beijing / Singapore / Perth', value: 'Asia/Singapore' },
-  { label: 'UTC+9  Tokyo / Seoul', value: 'Asia/Tokyo' },
-  { label: 'UTC+10  Sydney / Melbourne', value: 'Australia/Sydney' },
-  { label: 'UTC+12  Auckland / Fiji', value: 'Pacific/Auckland' },
+  { label: 'UTC-8  Pacific (US & Canada)', value: 'America/Los_Angeles', country: 'United States' },
+  { label: 'UTC-7  Mountain (US & Canada)', value: 'America/Denver', country: 'United States' },
+  { label: 'UTC-6  Central (US & Canada)', value: 'America/Chicago', country: 'United States' },
+  { label: 'UTC-5  Eastern (US & Canada)', value: 'America/New_York', country: 'United States' },
+  { label: 'UTC-4  Atlantic / Santiago', value: 'America/Halifax', country: 'Canada' },
+  { label: 'UTC-3  Buenos Aires / São Paulo', value: 'America/Argentina/Buenos_Aires', country: 'Argentina' },
+  { label: 'UTC-1  Azores', value: 'Atlantic/Azores', country: 'Portugal' },
+  { label: 'UTC+0  London / Lisbon (GMT)', value: 'Europe/London', country: 'United Kingdom' },
+  { label: 'UTC+1  Paris / Berlin / Madrid', value: 'Europe/Paris', country: 'France' },
+  { label: 'UTC+2  Cairo / Athens / Helsinki', value: 'Europe/Helsinki', country: 'Finland' },
+  { label: 'UTC+3  Moscow / Nairobi / Riyadh', value: 'Europe/Moscow', country: 'Russia' },
+  { label: 'UTC+4  Dubai / Baku', value: 'Asia/Dubai', country: 'UAE' },
+  { label: 'UTC+5  Karachi / Tashkent', value: 'Asia/Karachi', country: 'Pakistan' },
+  { label: 'UTC+5:30  Mumbai / Delhi', value: 'Asia/Kolkata', country: 'India' },
+  { label: 'UTC+6  Dhaka / Almaty', value: 'Asia/Dhaka', country: 'Bangladesh' },
+  { label: 'UTC+7  Bangkok / Jakarta / Hanoi', value: 'Asia/Bangkok', country: 'Thailand' },
+  { label: 'UTC+8  Beijing / Singapore / Perth', value: 'Asia/Singapore', country: 'Singapore' },
+  { label: 'UTC+9  Tokyo / Seoul', value: 'Asia/Tokyo', country: 'Japan' },
+  { label: 'UTC+10  Sydney / Melbourne', value: 'Australia/Sydney', country: 'Australia' },
+  { label: 'UTC+12  Auckland / Fiji', value: 'Pacific/Auckland', country: 'New Zealand' },
 ]
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -66,10 +66,32 @@ export default function OnboardingPage() {
   const [targetLangs, setTargetLangs] = useState<string[]>([])
   const [levels, setLevels] = useState<Record<string, string>>({})
   const [timezone, setTimezone] = useState('')
+  const [autoDetectedTz, setAutoDetectedTz] = useState<string | null>(null)
   const [availability, setAvailability] = useState<string[]>([])
   const [goals, setGoals] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const match = TIMEZONES.find(tz => tz.value === detected)
+    if (match) {
+      setTimezone(match.value)
+      setAutoDetectedTz(match.value)
+    } else {
+      // fallback: find by offset match
+      const offset = -new Date().getTimezoneOffset()
+      const hours = Math.floor(Math.abs(offset) / 60)
+      const mins = Math.abs(offset) % 60
+      const sign = offset >= 0 ? '+' : '-'
+      const offsetStr = `UTC${sign}${hours}${mins ? `:${mins}` : ''}`
+      const fallback = TIMEZONES.find(tz => tz.label.startsWith(offsetStr))
+      if (fallback) {
+        setTimezone(fallback.value)
+        setAutoDetectedTz(fallback.value)
+      }
+    }
+  }, [])
 
   function toggleTarget(lang: string) {
     setTargetLangs(prev =>
@@ -159,8 +181,9 @@ export default function OnboardingPage() {
               <Step3
                 timezone={timezone}
                 availability={availability}
-                onTimezone={setTimezone}
+                onTimezone={(tz) => { setTimezone(tz); setAutoDetectedTz(null) }}
                 onAvailabilityChange={setAvailability}
+                autoDetectedTz={autoDetectedTz}
               />
             )}
             {step === 3 && (
@@ -390,16 +413,39 @@ function Step3({
   availability,
   onTimezone,
   onAvailabilityChange,
+  autoDetectedTz,
 }: {
   timezone: string
   availability: string[]
   onTimezone: (tz: string) => void
   onAvailabilityChange: (slots: string[]) => void
+  autoDetectedTz: string | null
 }) {
+  const detectedTz = autoDetectedTz
+    ? TIMEZONES.find(tz => tz.value === autoDetectedTz) ?? null
+    : null
+  const detectedLabel = detectedTz?.label ?? null
+  const detectedCountry = detectedTz?.country ?? null
+
   return (
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-semibold text-gray-700 mb-2">Your timezone</label>
+
+        {detectedLabel && (
+          <div className="flex items-start gap-3 mb-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
+            <span className="text-green-500 text-base mt-0.5">✓</span>
+            <div>
+              <p className="text-sm font-semibold text-green-800">Timezone auto-detected</p>
+              <p className="text-xs text-green-700 mt-0.5">
+                We selected <span className="font-semibold">{detectedLabel}</span> for{' '}
+                <span className="font-semibold">{detectedCountry}</span>.
+                Change it below if needed.
+              </p>
+            </div>
+          </div>
+        )}
+
         <select
           value={timezone}
           onChange={e => onTimezone(e.target.value)}
@@ -417,7 +463,7 @@ function Step3({
           <label className="block text-sm font-semibold text-gray-700 mb-1">
             When are you free? <span className="text-gray-400 font-normal">(pick all that apply)</span>
           </label>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className="text-xs text-gray-600 mb-3">
             Click a period to select all hours. Use ▼ to fine-tune specific hours.
             Times shown in your timezone · stored in UTC.
           </p>

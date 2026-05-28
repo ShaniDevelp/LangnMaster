@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import type { Profile, Session, Group, Course, GroupMember } from '@/lib/supabase/types'
@@ -74,6 +74,31 @@ export default async function TeacherDashboard() {
     upcoming = (upRes.data ?? []) as unknown as SessionRow[]
     recentCompleted = (doneRes.data ?? []) as unknown as SessionRow[]
     missedSessions = (missedRes.data ?? []) as unknown as SessionRow[]
+  }
+
+  // Fetch payment status for all group members (admin client bypasses RLS)
+  const allMemberPairs = groups.flatMap(g =>
+    g.group_members.map(m => ({ user_id: m.user_id, course_id: g.course_id }))
+  )
+  const groupHasUnpaid = new Set<string>()
+  if (allMemberPairs.length > 0) {
+    const adminClient = createAdminClient()
+    const userIds = [...new Set(allMemberPairs.map(p => p.user_id))]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: payments } = await (adminClient as any)
+      .from('enrollments')
+      .select('user_id, course_id, payment_status')
+      .in('user_id', userIds)
+    const paymentMap = new Map<string, string>(
+      ((payments ?? []) as { user_id: string; course_id: string; payment_status: string }[])
+        .map(e => [`${e.user_id}:${e.course_id}`, e.payment_status])
+    )
+    for (const g of groups) {
+      const hasUnpaid = g.group_members.some(
+        m => paymentMap.get(`${m.user_id}:${g.course_id}`) !== 'paid'
+      )
+      if (hasUnpaid) groupHasUnpaid.add(g.id)
+    }
   }
 
   const totalStudents = groups.reduce((acc, g) => acc + g.group_members.length, 0)
@@ -173,35 +198,7 @@ export default async function TeacherDashboard() {
         <div className="lg:col-span-3 space-y-4">
           <h2 className="text-base font-bold text-gray-900">Next Session</h2>
           {nextSession ? (
-            <div className="bg-gradient-to-br from-[#6c4ff5] to-indigo-600 rounded-2xl p-6 text-white shadow-lg shadow-purple-200">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  {isToday(nextSession.scheduled_at) && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-white/20 text-white px-2.5 py-1 rounded-full mb-3">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                      Today
-                    </span>
-                  )}
-                  <h3 className="text-xl font-bold truncate">{nextSession.groups?.courses?.name}</h3>
-                  <p className="text-purple-200 text-sm mt-1">{formatDate(nextSession.scheduled_at)}</p>
-                  <p className="text-purple-300 text-xs mt-0.5 capitalize">{nextSession.groups?.courses?.language}</p>
-                </div>
-                <div className="flex-shrink-0">
-                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${nextSession.status === 'active' ? 'bg-emerald-400 text-white' : 'bg-white/20 text-white'
-                    }`}>
-                    {nextSession.status}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-6 flex items-center gap-3">
-                <Link
-                  href={`/teacher/session/${nextSession.room_token}`}
-                  className="bg-white text-[#6c4ff5] font-bold text-sm px-6 py-3 rounded-xl hover:bg-purple-50 transition-colors shadow-sm"
-                >
-                  {nextSession.status === 'active' ? '▶ Resume Class' : '▶ Enter Lobby'}
-                </Link>
-              </div>
-            </div>
+            <NextSessionBanner session={nextSession} isUnpaid={groupHasUnpaid.has(nextSession.group_id)} />
           ) : (
             <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
               <p className="text-3xl mb-3">🗓</p>
@@ -219,22 +216,29 @@ export default async function TeacherDashboard() {
                 <p className="text-sm font-bold text-gray-700">More sessions</p>
               </div>
               <div className="divide-y divide-gray-50">
-                {upcoming.slice(1).map(s => (
+                {upcoming.slice(1).map(s => {
+                  const isUnpaid = groupHasUnpaid.has(s.group_id)
+                  return (
                   <div key={s.id} className="flex items-center justify-between px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isToday(s.scheduled_at) ? 'bg-emerald-400' : 'bg-gray-200'
-                        }`} />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{s.groups?.courses?.name}</p>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isUnpaid ? 'bg-red-400' : isToday(s.scheduled_at) ? 'bg-emerald-400' : 'bg-gray-200'}`} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{s.groups?.courses?.name}</p>
                         <p className="text-xs text-gray-400">{formatDate(s.scheduled_at)}</p>
+                        {isUnpaid && <p className="text-[10px] text-red-500 font-semibold mt-0.5">⚠️ student unpaid</p>}
                       </div>
                     </div>
-                    <Link href={`/teacher/session/${s.room_token}`}
-                      className="text-xs font-bold text-[#6c4ff5] hover:underline flex-shrink-0">
-                      Open →
-                    </Link>
+                    {isUnpaid ? (
+                      <span className="text-xs font-bold text-red-400 flex-shrink-0">🔒 Locked</span>
+                    ) : (
+                      <Link href={`/teacher/session/${s.room_token}`}
+                        className="text-xs font-bold text-[#6c4ff5] hover:underline flex-shrink-0">
+                        Open →
+                      </Link>
+                    )}
                   </div>
-                ))}
+                )})}
+
               </div>
             </div>
           )}
@@ -314,6 +318,52 @@ export default async function TeacherDashboard() {
 
       {/* ── My Course Requests (refactored to client component) ── */}
       <MyCoursesClient courses={availableCourses.filter(c => c.status !== 'none')} currentUserId={user.id} />
+    </div>
+  )
+}
+
+function NextSessionBanner({ session, isUnpaid }: { session: SessionRow; isUnpaid: boolean }) {
+  return (
+    <div className={`rounded-2xl p-6 text-white shadow-lg ${isUnpaid ? 'bg-gradient-to-br from-red-500 to-orange-500 shadow-red-100' : 'bg-gradient-to-br from-[#6c4ff5] to-indigo-600 shadow-purple-200'}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          {new Date(session.scheduled_at).toDateString() === new Date().toDateString() && (
+            <span className="inline-flex items-center gap-1.5 text-xs font-bold bg-white/20 text-white px-2.5 py-1 rounded-full mb-3">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse" />
+              Today
+            </span>
+          )}
+          <h3 className="text-xl font-bold truncate">{session.groups?.courses?.name}</h3>
+          <p className="text-white/70 text-sm mt-1">
+            {new Date(session.scheduled_at).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}
+          </p>
+          <p className="text-white/60 text-xs mt-0.5 capitalize">{session.groups?.courses?.language}</p>
+          {isUnpaid && (
+            <p className="text-white/90 text-xs font-semibold mt-2 bg-white/20 rounded-xl px-3 py-1.5 inline-block">
+              ⚠️ Student(s) have not paid — session locked
+            </p>
+          )}
+        </div>
+        <div className="flex-shrink-0">
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${session.status === 'active' ? 'bg-emerald-400 text-white' : 'bg-white/20 text-white'}`}>
+            {session.status}
+          </span>
+        </div>
+      </div>
+      <div className="mt-6 flex items-center gap-3">
+        {isUnpaid ? (
+          <span className="bg-white/20 text-white font-bold text-sm px-6 py-3 rounded-xl cursor-not-allowed">
+            🔒 Locked — awaiting payment
+          </span>
+        ) : (
+          <Link
+            href={`/teacher/session/${session.room_token}`}
+            className="bg-white text-[#6c4ff5] font-bold text-sm px-6 py-3 rounded-xl hover:bg-purple-50 transition-colors shadow-sm"
+          >
+            {session.status === 'active' ? '▶ Resume Class' : '▶ Enter Lobby'}
+          </Link>
+        )}
+      </div>
     </div>
   )
 }

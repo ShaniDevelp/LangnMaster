@@ -60,7 +60,7 @@ function buildSessionMeta(sessions: SessionRow[]) {
   return indexMap
 }
 
-export function TeacherSessionsClient({ sessions }: { sessions: SessionRow[] }) {
+export function TeacherSessionsClient({ sessions, groupUnpaidStudents = {} }: { sessions: SessionRow[]; groupUnpaidStudents?: Record<string, string[]> }) {
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming')
   const [selectedSession, setSelectedSession] = useState<SessionRow | null>(null)
 
@@ -198,30 +198,37 @@ export function TeacherSessionsClient({ sessions }: { sessions: SessionRow[] }) 
             const msUntil = new Date(s.scheduled_at).getTime() - nowMs
             const joinable = isActive || msUntil < 30 * 60_000
             const isNext = activeTab === 'upcoming' && i === 0
+            const unpaidNames = activeTab === 'upcoming' ? (groupUnpaidStudents[s.group_id] ?? []) : []
+            const isUnpaid = unpaidNames.length > 0
 
             return (
               <div
                 key={s.id}
                 className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col transition-shadow hover:shadow-md ${
-                  isNext ? 'border-purple-200' : 'border-gray-100'
+                  isUnpaid ? 'border-red-200' : isNext ? 'border-purple-200' : 'border-gray-100'
                 }`}
               >
                 {/* Top accent */}
-                <div className={`h-1 ${isNext ? 'bg-[#6c4ff5]' : 'bg-gray-100'}`} />
+                <div className={`h-1 ${isUnpaid ? 'bg-red-400' : isNext ? 'bg-[#6c4ff5]' : 'bg-gray-100'}`} />
 
                 <div className="p-5 flex flex-col flex-1">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-xl">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isUnpaid ? 'bg-red-50 border border-red-100' : 'bg-gray-50 border border-gray-100'}`}>
                       {LANG_EMOJI[lang] ?? '🏫'}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      {isActive && (
+                      {isUnpaid && (
+                        <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-semibold">
+                          🔒 Unpaid
+                        </span>
+                      )}
+                      {isActive && !isUnpaid && (
                         <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-semibold animate-pulse">
                           <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
                           Live
                         </span>
                       )}
-                      {isNext && !isActive && (
+                      {isNext && !isActive && !isUnpaid && (
                         <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
                           Next
                         </span>
@@ -257,6 +264,11 @@ export function TeacherSessionsClient({ sessions }: { sessions: SessionRow[] }) 
                       </div>
                     </div>
 
+                    {isUnpaid && (
+                      <p className="text-[10px] text-red-500 font-semibold">
+                        ⚠️ {unpaidNames.join(', ')} {unpaidNames.length === 1 ? 'has' : 'have'} not paid
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => setSelectedSession(s)}
@@ -265,6 +277,11 @@ export function TeacherSessionsClient({ sessions }: { sessions: SessionRow[] }) 
                         Details
                       </button>
                       {activeTab === 'upcoming' && (
+                        isUnpaid ? (
+                          <span className="flex-1 px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-red-400 font-semibold text-xs text-center cursor-not-allowed">
+                            🔒 Locked
+                          </span>
+                        ) : (
                         <Link
                           href={`/teacher/session/${s.room_token}`}
                           className={`flex-1 px-3 py-2 rounded-xl font-semibold text-xs text-center transition-colors ${
@@ -275,6 +292,7 @@ export function TeacherSessionsClient({ sessions }: { sessions: SessionRow[] }) 
                         >
                           {isActive ? 'Continue' : 'Start Class'}
                         </Link>
+                        )
                       )}
                       {activeTab === 'completed' && s.status === 'completed' && (
                         <Link

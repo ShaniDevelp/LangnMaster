@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
 import type { Profile, Group, Course, GroupMember, Session } from '@/lib/supabase/types'
@@ -79,6 +79,24 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   const upcoming = sessions.filter(s => ['scheduled', 'active'].includes(s.status))
   const levelStyle = LEVEL_COLORS[group.courses?.level ?? ''] ?? 'bg-gray-100 text-gray-600'
 
+  // Fetch payment status for each student in this group (admin client — bypasses RLS)
+  const memberUserIds = group.group_members.map(m => m.user_id)
+  let paymentStatusByUser: Record<string, string> = {}
+  if (memberUserIds.length > 0 && group.course_id) {
+    const adminClient = createAdminClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: enrollmentPayments } = await (adminClient as any)
+      .from('enrollments')
+      .select('user_id, payment_status')
+      .eq('course_id', group.course_id)
+      .in('user_id', memberUserIds)
+    paymentStatusByUser = ((enrollmentPayments ?? []) as { user_id: string; payment_status: string }[])
+      .reduce<Record<string, string>>((acc, e) => { acc[e.user_id] = e.payment_status; return acc }, {})
+  }
+  const unpaidStudentNames = group.group_members
+    .filter(m => paymentStatusByUser[m.user_id] !== 'paid')
+    .map(m => m.profiles?.name?.split(' ')[0] ?? 'Student')
+
   const studentStats = group.group_members.map(m => {
     const total = completedSessions.length
     const present = completedSessions.filter(s => {
@@ -139,14 +157,23 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
             <div className="divide-y divide-gray-50">
               {group.group_members.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">No students assigned</p>
-              ) : studentStats.map(m => (
+              ) : studentStats.map(m => {
+                const isPaid = paymentStatusByUser[m.user_id] === 'paid'
+                return (
                 <div key={m.id} className="px-5 py-4">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
                       {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{m.profiles?.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900">{m.profiles?.name}</p>
+                        {!isPaid && (
+                          <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full flex-shrink-0">
+                            Unpaid
+                          </span>
+                        )}
+                      </div>
                       {m.rate !== null ? (
                         <p className="text-xs text-gray-400">
                           {m.present}/{m.total} sessions ·{' '}
@@ -166,7 +193,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                     </div>
                   )}
                 </div>
-              ))}
+              )})}
             </div>
           </div>
 
@@ -178,19 +205,32 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
               </div>
               <div className="divide-y divide-gray-50">
                 {upcoming.map(s => (
-                  <div key={s.id} className="px-5 py-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900">{fmt(s.scheduled_at)}</p>
-                      {s.topic && <p className="text-xs text-gray-400 italic mt-0.5">{s.topic}</p>}
+                  <div key={s.id} className="px-5 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{fmt(s.scheduled_at)}</p>
+                        {s.topic && <p className="text-xs text-gray-400 italic mt-0.5">{s.topic}</p>}
+                      </div>
+                      {unpaidStudentNames.length > 0 ? (
+                        <span className="text-xs font-bold px-3 py-1.5 rounded-xl bg-red-100 text-red-600 flex-shrink-0 cursor-not-allowed">
+                          🔒 Locked
+                        </span>
+                      ) : (
+                        <Link href={`/teacher/session/${s.room_token}`}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 ${
+                            s.status === 'active'
+                              ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                              : 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8]'
+                          }`}>
+                          {s.status === 'active' ? 'Resume' : 'Lobby →'}
+                        </Link>
+                      )}
                     </div>
-                    <Link href={`/teacher/session/${s.room_token}`}
-                      className={`text-xs font-bold px-3 py-1.5 rounded-xl transition-colors flex-shrink-0 ${
-                        s.status === 'active'
-                          ? 'bg-emerald-500 text-white hover:bg-emerald-600'
-                          : 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8]'
-                      }`}>
-                      {s.status === 'active' ? 'Resume' : 'Lobby →'}
-                    </Link>
+                    {unpaidStudentNames.length > 0 && (
+                      <p className="text-xs text-red-500 mt-1.5">
+                        ⚠️ {unpaidStudentNames.join(', ')} {unpaidStudentNames.length === 1 ? 'has' : 'have'} not paid — session locked until payment is confirmed.
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>

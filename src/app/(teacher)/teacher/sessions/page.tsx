@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TeacherSessionsClient } from './TeacherSessionsClient'
 
@@ -32,6 +32,42 @@ export default async function TeacherSessionsPage() {
     sessions = data ?? []
   }
 
+  // Build groupId → unpaid student names map (admin client bypasses RLS)
+  const groupUnpaidStudents: Record<string, string[]> = {}
+  const memberPairs: { user_id: string; course_id: string; group_id: string; name: string }[] = []
+  for (const s of sessions) {
+    const g = s.groups as any
+    if (!g?.group_members || !g?.course_id) continue
+    for (const m of g.group_members) {
+      memberPairs.push({
+        user_id: m.user_id,
+        course_id: g.course_id,
+        group_id: s.group_id,
+        name: m.profiles?.name?.split(' ')[0] ?? 'Student',
+      })
+    }
+  }
+  if (memberPairs.length > 0) {
+    const adminClient = createAdminClient()
+    const userIds = [...new Set(memberPairs.map(p => p.user_id))]
+    const { data: payments } = await (adminClient as any)
+      .from('enrollments')
+      .select('user_id, course_id, payment_status')
+      .in('user_id', userIds)
+    const paymentMap = new Map<string, string>(
+      ((payments ?? []) as { user_id: string; course_id: string; payment_status: string }[])
+        .map((e: any) => [`${e.user_id}:${e.course_id}`, e.payment_status])
+    )
+    for (const p of memberPairs) {
+      if (paymentMap.get(`${p.user_id}:${p.course_id}`) !== 'paid') {
+        if (!groupUnpaidStudents[p.group_id]) groupUnpaidStudents[p.group_id] = []
+        if (!groupUnpaidStudents[p.group_id].includes(p.name)) {
+          groupUnpaidStudents[p.group_id].push(p.name)
+        }
+      }
+    }
+  }
+
   const upcomingCount = sessions.filter(s => s.status === 'scheduled' || s.status === 'active').length
   const completedCount = sessions.filter(s => s.status === 'completed').length
 
@@ -56,7 +92,7 @@ export default async function TeacherSessionsPage() {
         </div>
       </div>
 
-      <TeacherSessionsClient sessions={sessions} />
+      <TeacherSessionsClient sessions={sessions} groupUnpaidStudents={groupUnpaidStudents} />
     </div>
   )
 }

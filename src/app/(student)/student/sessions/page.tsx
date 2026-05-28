@@ -38,6 +38,15 @@ export default async function StudentSessionsPage() {
     sessions = data ?? []
   }
 
+  // Fetch student's own enrollment payment status
+  const { data: enrollmentsRaw } = await supabase
+    .from('enrollments')
+    .select('course_id, payment_status')
+    .eq('user_id', user.id)
+  const unpaidCourseIds: string[] = (enrollmentsRaw ?? [])
+    .filter((e: any) => e.payment_status !== 'paid')
+    .map((e: any) => e.course_id as string)
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -59,7 +68,7 @@ export default async function StudentSessionsPage() {
         </div>
       </div>
 
-      <StudentSessionsClient sessions={sessions} />
+      <StudentSessionsClient sessions={sessions} unpaidCourseIds={unpaidCourseIds} />
     </div>
   )
 }

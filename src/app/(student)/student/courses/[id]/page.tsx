@@ -128,7 +128,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   const cohortDate = nextCohortDate()
   const dist = ratingDistribution(reviews)
   const avg = avgRating(reviews)
-  const canEnroll = profile ? prereqMet(course, profile) : true
+  const canEnroll = true // enrollment open to all levels; payment deferred until group assignment
   const outcomes: string[] = course.outcomes?.length
     ? course.outcomes
     : defaultOutcomes(course.language, course.level)
@@ -363,18 +363,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             <p className="text-xs text-gray-400">Per course</p>
             <p className="text-xl font-bold text-gray-900">${course.price_usd}</p>
           </div>
-          {canEnroll ? (
-            <Link
-              href={`/student/courses/${course.id}/checkout`}
-              className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl hover:bg-brand-600 transition-colors text-center text-sm"
-            >
-              Enroll — ${course.price_usd}
-            </Link>
-          ) : (
-            <span className="flex-1 bg-gray-200 text-gray-400 font-bold py-3 rounded-xl text-center text-sm cursor-not-allowed">
-              Level too low
-            </span>
-          )}
+          <Link
+            href={`/student/courses/${course.id}/checkout`}
+            className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl hover:bg-brand-600 transition-colors text-center text-sm"
+          >
+            Enroll — ${course.price_usd}
+          </Link>
         </div>
       )}
     </div>
@@ -480,30 +474,15 @@ function EnrollBlock({
         ))}
       </div>
 
-      {!canEnroll && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800">
-          ⚠️ Your current {course.language} level may not meet the prerequisite for this course. Consider starting with a lower level.
-        </div>
-      )}
+      <Link
+        href={`/student/courses/${course.id}/checkout`}
+        className="block w-full text-center bg-brand-500 text-white font-bold py-4 rounded-2xl text-base hover:bg-brand-600 transition-colors shadow-lg shadow-purple-200"
+      >
+        Enroll — ${course.price_usd}
+      </Link>
 
-      {canEnroll ? (
-        <Link
-          href={`/student/courses/${course.id}/checkout`}
-          className="block w-full text-center bg-brand-500 text-white font-bold py-4 rounded-2xl text-base hover:bg-brand-600 transition-colors shadow-lg shadow-purple-200"
-        >
-          Enroll — ${course.price_usd}
-        </Link>
-      ) : (
-        <button
-          disabled
-          className="w-full bg-gray-200 text-gray-400 font-bold py-4 rounded-2xl text-base cursor-not-allowed"
-        >
-          Level too low to enroll
-        </button>
-      )}
-
-      <p className="text-xs text-center text-gray-400">
-        Secure payment · 7-day refund guarantee
+      <p className="text-xs text-center text-gray-500">
+        🔓 Enroll now · pay after your group is assigned
       </p>
     </div>
   )

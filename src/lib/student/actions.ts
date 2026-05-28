@@ -21,6 +21,33 @@ export async function enrollInCourse(formData: FormData): Promise<void> {
   redirect('/student/dashboard')
 }
 
+// Enroll without payment — student pays after group is assigned
+export async function enrollWithoutPayment(courseId: string): Promise<{ error: string } | void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { data: existing } = await supabase
+    .from('enrollments')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('course_id', courseId)
+    .maybeSingle()
+
+  if (existing) redirect('/student/dashboard')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await supabase.from('enrollments').insert({
+    user_id: user.id,
+    course_id: courseId,
+    status: 'pending',
+    payment_status: 'unpaid',
+  } as any)
+
+  if (error) return { error: error.message }
+  redirect('/student/dashboard?enrolled=1')
+}
+
 // ── Stripe Checkout ──────────────────────────────────────────────────────────
 
 export async function createCheckoutSession(courseId: string): Promise<void> {
@@ -188,15 +215,30 @@ export async function fulfillCheckoutSession(stripeSessionId: string): Promise<v
 
   const supabase = createAdminClient()
 
-  await supabase.from('enrollments').upsert(
-    {
+  // Check if enrollment already exists (student enrolled without payment first)
+  const { data: existing } = await supabase
+    .from('enrollments')
+    .select('id, status')
+    .eq('user_id', user_id)
+    .eq('course_id', course_id)
+    .maybeSingle()
+
+  if (existing) {
+    // Only update payment fields — preserve current status (could be 'assigned' or 'active')
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('enrollments').update({
+      payment_status: 'paid',
+      stripe_session_id: stripeSessionId,
+    } as any).eq('id', existing.id)
+  } else {
+    // New enrollment (paid upfront)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await supabase.from('enrollments').insert({
       user_id,
       course_id,
       status: 'pending',
       payment_status: 'paid',
       stripe_session_id: stripeSessionId,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any,
-    { onConflict: 'user_id,course_id' }
-  )
+    } as any)
+  }
 }

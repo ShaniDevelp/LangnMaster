@@ -65,7 +65,8 @@ function timeUntil(iso: string, nowMs: number) {
   return `${m}m away`
 }
 
-export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) {
+export function StudentSessionsClient({ sessions, unpaidCourseIds = [] }: { sessions: SessionRow[]; unpaidCourseIds?: string[] }) {
+  const unpaidSet = new Set(unpaidCourseIds)
   const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>('upcoming')
   const [selectedSession, setSelectedSession] = useState<SessionRow | null>(null)
 
@@ -101,6 +102,27 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
           </button>
         ))}
       </div>
+
+      {/* Unpaid payment banner */}
+      {activeTab === 'upcoming' && unpaidCourseIds.length > 0 && (
+        <div className="bg-orange-50 border border-orange-300 rounded-2xl p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="text-xl flex-shrink-0">💳</span>
+            <div className="min-w-0">
+              <p className="font-semibold text-orange-900 text-sm">Payment required to unlock sessions</p>
+              <p className="text-xs text-orange-700 mt-0.5">
+                Your group is assigned but payment is pending. Pay now to join your live sessions.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/student/courses"
+            className="flex-shrink-0 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Pay now →
+          </Link>
+        </div>
+      )}
 
       {/* Missed sessions banner — only shown in upcoming tab */}
       {activeTab === 'upcoming' && missed.length > 0 && (
@@ -195,30 +217,37 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
             const msUntil = new Date(s.scheduled_at).getTime() - nowMs
             const joinable = isActive || msUntil < 15 * 60_000
             const isNext = activeTab === 'upcoming' && i === 0
+            const groupCourseId = (s.groups as any)?.course_id as string | undefined
+            const isUnpaid = activeTab === 'upcoming' && !!groupCourseId && unpaidSet.has(groupCourseId)
 
             return (
               <div
                 key={s.id}
                 className={`bg-white rounded-2xl border shadow-sm overflow-hidden flex flex-col transition-shadow hover:shadow-md ${
-                  isNext ? 'border-purple-200' : 'border-gray-100'
+                  isUnpaid ? 'border-orange-200' : isNext ? 'border-purple-200' : 'border-gray-100'
                 }`}
               >
                 {/* Top accent */}
-                <div className={`h-1 ${isNext ? 'bg-[#6c4ff5]' : 'bg-gray-100'}`} />
+                <div className={`h-1 ${isUnpaid ? 'bg-orange-400' : isNext ? 'bg-[#6c4ff5]' : 'bg-gray-100'}`} />
 
                 <div className="p-5 flex flex-col flex-1">
                   <div className="flex items-start justify-between mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center text-xl">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isUnpaid ? 'bg-orange-50 border border-orange-100' : 'bg-gray-50 border border-gray-100'}`}>
                       {LANG_EMOJI[lang] ?? '📅'}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
-                      {isActive && (
+                      {isUnpaid && (
+                        <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">
+                          🔒 Unpaid
+                        </span>
+                      )}
+                      {isActive && !isUnpaid && (
                         <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 text-red-600 text-xs font-semibold animate-pulse">
                           <span className="w-1.5 h-1.5 bg-red-500 rounded-full" />
                           Live
                         </span>
                       )}
-                      {isNext && !isActive && (
+                      {isNext && !isActive && !isUnpaid && (
                         <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
                           Next
                         </span>
@@ -262,16 +291,25 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
                         Details
                       </button>
                       {activeTab === 'upcoming' && (
-                        <Link
-                          href={`/student/session/${s.room_token}`}
-                          className={`flex-1 px-3 py-2 rounded-xl font-semibold text-xs text-center transition-colors ${
-                            joinable
-                              ? 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8]'
-                              : 'bg-gray-100 text-gray-400 pointer-events-none'
-                          }`}
-                        >
-                          {isActive ? 'Join Now' : 'Join Room'}
-                        </Link>
+                        isUnpaid ? (
+                          <Link
+                            href={groupCourseId ? `/student/courses/${groupCourseId}/checkout` : '/student/courses'}
+                            className="flex-1 px-3 py-2 rounded-xl bg-orange-500 text-white font-semibold text-xs text-center hover:bg-orange-600 transition-colors"
+                          >
+                            Pay to unlock
+                          </Link>
+                        ) : (
+                          <Link
+                            href={`/student/session/${s.room_token}`}
+                            className={`flex-1 px-3 py-2 rounded-xl font-semibold text-xs text-center transition-colors ${
+                              joinable
+                                ? 'bg-[#6c4ff5] text-white hover:bg-[#5c3de8]'
+                                : 'bg-gray-100 text-gray-400 pointer-events-none'
+                            }`}
+                          >
+                            {isActive ? 'Join Now' : 'Join Room'}
+                          </Link>
+                        )
                       )}
                     </div>
                   </div>
@@ -288,6 +326,7 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
           onClose={() => setSelectedSession(null)}
           nowMs={nowMs}
           sessionNumber={sessionIndexMap.get(selectedSession.id) ?? 1}
+          isUnpaid={unpaidSet.has((selectedSession.groups as any)?.course_id ?? '')}
         />
       )}
     </div>
@@ -295,12 +334,13 @@ export function StudentSessionsClient({ sessions }: { sessions: SessionRow[] }) 
 }
 
 function SessionDetailModal({
-  session, onClose, nowMs, sessionNumber,
+  session, onClose, nowMs, sessionNumber, isUnpaid,
 }: {
   session: SessionRow
   onClose: () => void
   nowMs: number
   sessionNumber: number
+  isUnpaid: boolean
 }) {
   const isCompleted = session.status === 'completed'
   const isMissed = session.status === 'scheduled' && new Date(session.scheduled_at).getTime() < nowMs
@@ -473,28 +513,44 @@ function SessionDetailModal({
                 </section>
               )}
 
-              <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-center">
-                <p className="text-sm font-semibold text-gray-700 mb-1">
-                  {joinable ? 'Room is ready' : 'Opens 15 min before session'}
-                </p>
-                <p className="text-xs text-gray-400 mb-4">
-                  {joinable
-                    ? 'Your teacher is waiting.'
-                    : `Starts ${fmt(session.scheduled_at)}`}
-                </p>
-                {joinable ? (
+              {isUnpaid ? (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                  <p className="text-2xl mb-2">🔒</p>
+                  <p className="text-sm font-bold text-orange-900 mb-1">Session locked</p>
+                  <p className="text-xs text-orange-700 mb-4">
+                    Complete your payment to unlock and join this session.
+                  </p>
                   <Link
-                    href={`/student/session/${session.room_token}`}
-                    className="inline-block w-full py-2.5 rounded-xl bg-[#6c4ff5] text-white font-semibold text-sm hover:bg-[#5c3de8] transition-colors"
+                    href={`/student/courses/${(session.groups as any)?.course_id}/checkout`}
+                    className="inline-block w-full py-2.5 rounded-xl bg-orange-500 text-white font-semibold text-sm hover:bg-orange-600 transition-colors"
                   >
-                    Join Session
+                    Pay to unlock →
                   </Link>
-                ) : (
-                  <div className="py-2.5 rounded-xl bg-gray-200 text-gray-400 font-semibold text-sm">
-                    Not yet available
-                  </div>
-                )}
-              </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl border border-gray-100 p-4 text-center">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">
+                    {joinable ? 'Room is ready' : 'Opens 15 min before session'}
+                  </p>
+                  <p className="text-xs text-gray-400 mb-4">
+                    {joinable
+                      ? 'Your teacher is waiting.'
+                      : `Starts ${fmt(session.scheduled_at)}`}
+                  </p>
+                  {joinable ? (
+                    <Link
+                      href={`/student/session/${session.room_token}`}
+                      className="inline-block w-full py-2.5 rounded-xl bg-[#6c4ff5] text-white font-semibold text-sm hover:bg-[#5c3de8] transition-colors"
+                    >
+                      Join Session
+                    </Link>
+                  ) : (
+                    <div className="py-2.5 rounded-xl bg-gray-200 text-gray-400 font-semibold text-sm">
+                      Not yet available
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

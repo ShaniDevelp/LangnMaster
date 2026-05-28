@@ -228,6 +228,12 @@ export default async function StudentDashboard() {
   const hasPending = pendingEnrollments.length > 0
   const nextSession = upcomingSessions[0]
 
+  // Unpaid enrolled students who have been assigned a group → prompt payment
+  const unpaidAssignedEnrollments = enrollments.filter(
+    e => e.payment_status === 'unpaid' && (e.status === 'assigned' || e.status === 'active')
+  )
+  const hasUnpaidSessions = unpaidAssignedEnrollments.length > 0
+
   // Fetch teacher pool for pending courses
   let pendingTeachers: TeacherRow[] = []
   if (hasPending) {
@@ -274,6 +280,30 @@ export default async function StudentDashboard() {
         </Link>
       </div>
 
+      {/* ── Unpaid sessions payment prompt ──────────────────────── */}
+      {hasUnpaidSessions && (
+        <div className="bg-orange-50 border border-orange-300 rounded-2xl p-4 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="text-xl flex-shrink-0">💳</span>
+            <div className="min-w-0">
+              <p className="font-semibold text-orange-900 text-sm">
+                Your group{unpaidAssignedEnrollments.length > 1 ? 's are' : ' is'} assigned — pay to unlock sessions
+              </p>
+              <p className="text-xs text-orange-700 mt-0.5">
+                {unpaidAssignedEnrollments.map(e => e.courses?.name).filter(Boolean).join(', ')} —
+                complete payment to join your live sessions.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/student/courses/${unpaidAssignedEnrollments[0]?.course_id}/checkout`}
+            className="flex-shrink-0 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+          >
+            Pay now →
+          </Link>
+        </div>
+      )}
+
       {/* ── Missed sessions alert ──────────────────────────────── */}
       {missedSessions.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start justify-between gap-4">
@@ -306,7 +336,7 @@ export default async function StudentDashboard() {
         {/* Main state card — 3/5 cols */}
         <div className="lg:col-span-3">
           {nextSession ? (
-            <ActiveSessionCard session={nextSession} />
+            <ActiveSessionCard session={nextSession} isUnpaid={hasUnpaidSessions} unpaidCourseId={unpaidAssignedEnrollments[0]?.course_id} />
           ) : hasPending ? (
             <PendingStatusCard
               nextMonday={monday}
@@ -465,16 +495,26 @@ export default async function StudentDashboard() {
                   const isNext = i === 0
                   const isActive = s.status === 'active'
                   const canJoin = isActive || (new Date(s.scheduled_at).getTime() - new Date().getTime() < 10 * 60_000)
+                  // Check if the enrollment for this session's course is unpaid
+                  const sessionCourseId = s.groups?.courses ? (s.groups as { courses?: { name?: string; language?: string } & { id?: string } }).courses?.['id'] : undefined
+                  const isUnpaid = unpaidAssignedEnrollments.some(e =>
+                    !sessionCourseId || e.course_id === sessionCourseId || e.status === 'assigned' || e.status === 'active'
+                  ) && hasUnpaidSessions
                   return (
                     <div key={s.id} className={`rounded-2xl border p-4 flex flex-col gap-3 ${isNext ? 'bg-brand-50 border-brand-200' : 'bg-white border-gray-100 shadow-sm'}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${isNext ? 'bg-brand-500 text-white' : 'bg-gray-100 text-gray-500'}`}>
                           #{i + 1}
                         </div>
-                        {isActive && (
+                        {isActive && !isUnpaid && (
                           <span className="text-[10px] bg-red-100 text-red-600 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
                             <span className="w-1 h-1 bg-red-500 rounded-full animate-pulse" />
                             LIVE
+                          </span>
+                        )}
+                        {isUnpaid && (
+                          <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full">
+                            🔒 Unpaid
                           </span>
                         )}
                       </div>
@@ -490,16 +530,25 @@ export default async function StudentDashboard() {
                           {' · '}{s.duration_minutes} min
                         </p>
                       </div>
-                      <Link
-                        href={`/student/session/${s.room_token}`}
-                        className={`mt-auto text-center text-xs font-bold py-2 rounded-xl transition-colors ${
-                          canJoin
-                            ? 'bg-brand-500 text-white hover:bg-brand-600'
-                            : 'bg-gray-100 text-gray-400 pointer-events-none'
-                        }`}
-                      >
-                        {canJoin ? (isActive ? 'Join Now 🔴' : 'Join →') : 'Not yet open'}
-                      </Link>
+                      {isUnpaid ? (
+                        <Link
+                          href={`/student/courses/${unpaidAssignedEnrollments[0]?.course_id}/checkout`}
+                          className="mt-auto text-center text-xs font-bold py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                        >
+                          Pay to unlock 🔒
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/student/session/${s.room_token}`}
+                          className={`mt-auto text-center text-xs font-bold py-2 rounded-xl transition-colors ${
+                            canJoin
+                              ? 'bg-brand-500 text-white hover:bg-brand-600'
+                              : 'bg-gray-100 text-gray-400 pointer-events-none'
+                          }`}
+                        >
+                          {canJoin ? (isActive ? 'Join Now 🔴' : 'Join →') : 'Not yet open'}
+                        </Link>
+                      )}
                     </div>
                   )
                 })}
@@ -697,7 +746,7 @@ export default async function StudentDashboard() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function ActiveSessionCard({ session }: { session: SessionRow }) {
+function ActiveSessionCard({ session, isUnpaid, unpaidCourseId }: { session: SessionRow; isUnpaid: boolean; unpaidCourseId?: string }) {
   const diff = new Date(session.scheduled_at).getTime() - new Date().getTime()
   const countdown = diff < 0 ? 'Started' : (() => {
     const h = Math.floor(diff / 3_600_000)
@@ -708,25 +757,36 @@ function ActiveSessionCard({ session }: { session: SessionRow }) {
   })()
 
   return (
-    <div className="bg-gradient-to-br from-brand-500 to-indigo-600 text-white rounded-3xl p-6 lg:p-8 shadow-lg shadow-purple-200 h-full flex flex-col justify-between">
+    <div className={`${isUnpaid ? 'bg-gradient-to-br from-orange-400 to-amber-500' : 'bg-gradient-to-br from-brand-500 to-indigo-600'} text-white rounded-3xl p-6 lg:p-8 shadow-lg shadow-purple-200 h-full flex flex-col justify-between`}>
       <div>
-        <p className="text-purple-200 text-xs font-semibold uppercase tracking-wider mb-2">Next Session</p>
+        <p className="text-white/70 text-xs font-semibold uppercase tracking-wider mb-2">Next Session</p>
         <h2 className="text-xl lg:text-2xl font-bold mb-1">{session.groups?.courses?.name}</h2>
-        <p className="text-purple-200 text-sm mb-1">with {session.groups?.profiles?.name ?? 'your teacher'}</p>
-        <p className="text-purple-100 text-sm">
+        <p className="text-white/70 text-sm mb-1">with {session.groups?.profiles?.name ?? 'your teacher'}</p>
+        <p className="text-white/80 text-sm">
           {new Date(session.scheduled_at).toLocaleString('en-US', {
             weekday: 'short', month: 'short', day: 'numeric',
             hour: 'numeric', minute: '2-digit', hour12: true,
           })}
         </p>
+        {isUnpaid && (
+          <p className="text-white/90 text-xs font-semibold mt-2 bg-white/20 rounded-xl px-3 py-1.5 inline-block">
+            🔒 Session locked — payment required
+          </p>
+        )}
       </div>
       <div className="flex items-center justify-between mt-6">
         <div className="bg-white/20 rounded-xl px-4 py-2 text-sm font-semibold">
           ⏰ {countdown}
         </div>
-        <Link href={`/student/session/${session.room_token}`} className="bg-white text-brand-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-purple-50 transition-colors">
-          {session.status === 'active' ? 'Join Now 🔴' : 'Join Room →'}
-        </Link>
+        {isUnpaid ? (
+          <Link href={`/student/courses/${unpaidCourseId}/checkout`} className="bg-white text-orange-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-orange-50 transition-colors">
+            Pay to unlock 🔒
+          </Link>
+        ) : (
+          <Link href={`/student/session/${session.room_token}`} className="bg-white text-brand-600 font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-purple-50 transition-colors">
+            {session.status === 'active' ? 'Join Now 🔴' : 'Join Room →'}
+          </Link>
+        )}
       </div>
     </div>
   )

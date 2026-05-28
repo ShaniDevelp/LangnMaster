@@ -107,7 +107,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
   return (
     <div className="space-y-4">
       {/* Summary */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
+      <div className="flex items-center justify-between text-xs text-gray-600">
         <span>{totalSelected} hour slot{totalSelected !== 1 ? 's' : ''} selected</span>
         <button
           type="button"
@@ -126,7 +126,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
           <div className="grid border-b border-gray-100 bg-gray-50 sticky top-0 z-20" style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}>
             <div className="sticky left-0 bg-gray-50 z-30 border-r border-gray-100" />
             {DAYS.map(d => (
-              <div key={d} className="py-2 text-center text-[10px] font-bold text-gray-500">{d}</div>
+              <div key={d} className="py-2 text-center text-[10px] font-bold text-gray-700">{d}</div>
             ))}
           </div>
 
@@ -141,10 +141,10 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
                   style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}
                 >
                   <div className="px-2 py-3 sticky left-0 bg-white z-10 border-r border-gray-100 shadow-[1px_0_0_rgba(0,0,0,0.05)]">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                    <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wide">
                       {period.charAt(0).toUpperCase() + period.slice(1)}
                     </span>
-                    <p className="text-[8px] text-gray-300 leading-tight mt-0.5 whitespace-nowrap">
+                    <p className="text-[8px] text-gray-500 leading-tight mt-0.5 whitespace-nowrap">
                       {period === 'morning' ? '6am–12pm' : period === 'afternoon' ? '12pm–6pm' : '6pm–12am'}
                     </p>
                   </div>
@@ -161,7 +161,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
                           className={`w-8 h-8 rounded-xl text-xs font-bold border-2 transition-all flex items-center justify-center ${
                             active
                               ? `${colors.active} border-transparent shadow-sm`
-                              : `border-gray-100 bg-gray-50 text-gray-300 ${colors.hover}`
+                              : `border-gray-200 bg-gray-50 text-gray-500 ${colors.hover}`
                           }`}
                           title={`Toggle ${day} ${period}`}
                         >
@@ -171,7 +171,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
                           <button
                             type="button"
                             onClick={() => toggleExpand(day, period)}
-                            className="text-[9px] text-gray-400 hover:text-gray-600 leading-none py-1 w-full flex justify-center"
+                            className="text-[9px] text-gray-500 hover:text-gray-700 leading-none py-1 w-full flex justify-center"
                             title="Fine-tune hours"
                           >
                             {isOpen ? '▲' : '▼'}
@@ -191,7 +191,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
                         className="grid items-center border-t border-gray-100 first:border-0"
                         style={{ gridTemplateColumns: '80px repeat(7, 1fr)' }}
                       >
-                        <div className="px-2 py-1.5 text-[9px] text-gray-400 font-medium sticky left-0 bg-gray-50 z-10 border-r border-gray-100">
+                        <div className="px-2 py-1.5 text-[9px] text-gray-600 font-semibold sticky left-0 bg-gray-50 z-10 border-r border-gray-100">
                           {h < 12 ? `${h}:00 am` : h === 12 ? '12:00 pm' : `${h - 12}:00 pm`}
                         </div>
                         {DAYS.map(day => {
@@ -210,7 +210,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
                                 className={`w-6 h-6 rounded-lg text-[9px] font-bold transition-all border flex items-center justify-center ${
                                   active
                                     ? `${c.active} border-transparent`
-                                    : `border-gray-200 bg-white text-gray-300 ${c.hover}`
+                                    : `border-gray-200 bg-white text-gray-500 ${c.hover}`
                                 }`}
                               >
                                 {active ? '✓' : ''}
@@ -230,7 +230,7 @@ export function AvailabilityPicker({ utcSlots, timezone, onChange }: Props) {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-400">
+      <div className="flex flex-wrap items-center gap-4 text-[10px] text-gray-600">
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-amber-400" /> Morning</div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-orange-400" /> Afternoon</div>
         <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#6c4ff5]" /> Evening</div>
