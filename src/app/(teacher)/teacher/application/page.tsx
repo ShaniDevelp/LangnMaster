@@ -1,8 +1,10 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { submitApplication } from '@/lib/teacher/actions'
 import { AvailabilityPicker } from '@/components/AvailabilityPicker'
+import { AvatarUpload } from '@/components/AvatarUpload'
 
 const LANGUAGES = [
   'English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese',
@@ -22,24 +24,31 @@ const CERTIFICATIONS = [
 ]
 
 const TIMEZONES = [
-  { label: 'UTC-8  Pacific (US & Canada)',       value: 'America/Los_Angeles' },
-  { label: 'UTC-7  Mountain (US & Canada)',      value: 'America/Denver' },
-  { label: 'UTC-6  Central (US & Canada)',       value: 'America/Chicago' },
-  { label: 'UTC-5  Eastern (US & Canada)',       value: 'America/New_York' },
-  { label: 'UTC-3  Buenos Aires / São Paulo',    value: 'America/Argentina/Buenos_Aires' },
-  { label: 'UTC+0  London / Lisbon (GMT)',       value: 'Europe/London' },
-  { label: 'UTC+1  Paris / Berlin / Madrid',     value: 'Europe/Paris' },
-  { label: 'UTC+2  Cairo / Athens / Helsinki',   value: 'Europe/Helsinki' },
-  { label: 'UTC+3  Moscow / Nairobi / Riyadh',   value: 'Europe/Moscow' },
-  { label: 'UTC+4  Dubai / Baku',                value: 'Asia/Dubai' },
-  { label: 'UTC+5  Karachi / Tashkent',          value: 'Asia/Karachi' },
-  { label: 'UTC+5:30  Mumbai / Delhi',           value: 'Asia/Kolkata' },
-  { label: 'UTC+6  Dhaka / Almaty',              value: 'Asia/Dhaka' },
-  { label: 'UTC+7  Bangkok / Jakarta / Hanoi',   value: 'Asia/Bangkok' },
-  { label: 'UTC+8  Beijing / Singapore / Perth', value: 'Asia/Singapore' },
-  { label: 'UTC+9  Tokyo / Seoul',               value: 'Asia/Tokyo' },
-  { label: 'UTC+10  Sydney / Melbourne',         value: 'Australia/Sydney' },
-  { label: 'UTC+12  Auckland / Fiji',            value: 'Pacific/Auckland' },
+  { label: 'UTC-8  Pacific (US & Canada)',       value: 'America/Los_Angeles',              country: 'United States' },
+  { label: 'UTC-7  Mountain (US & Canada)',      value: 'America/Denver',                   country: 'United States' },
+  { label: 'UTC-6  Central (US & Canada)',       value: 'America/Chicago',                  country: 'United States' },
+  { label: 'UTC-5  Eastern (US & Canada)',       value: 'America/New_York',                 country: 'United States' },
+  { label: 'UTC-3  Buenos Aires / São Paulo',    value: 'America/Argentina/Buenos_Aires',   country: 'Argentina' },
+  { label: 'UTC+0  London / Lisbon (GMT)',       value: 'Europe/London',                    country: 'United Kingdom' },
+  { label: 'UTC+1  Paris / Berlin / Madrid',     value: 'Europe/Paris',                     country: 'France' },
+  { label: 'UTC+2  Cairo / Athens / Helsinki',   value: 'Europe/Helsinki',                  country: 'Finland' },
+  { label: 'UTC+3  Moscow / Nairobi / Riyadh',   value: 'Europe/Moscow',                    country: 'Russia' },
+  { label: 'UTC+4  Dubai / Baku',                value: 'Asia/Dubai',                       country: 'UAE' },
+  { label: 'UTC+5  Karachi / Tashkent',          value: 'Asia/Karachi',                     country: 'Pakistan' },
+  { label: 'UTC+5:30  Mumbai / Delhi',           value: 'Asia/Kolkata',                     country: 'India' },
+  { label: 'UTC+6  Dhaka / Almaty',              value: 'Asia/Dhaka',                       country: 'Bangladesh' },
+  { label: 'UTC+7  Bangkok / Jakarta / Hanoi',   value: 'Asia/Bangkok',                     country: 'Thailand' },
+  { label: 'UTC+8  Beijing / Singapore / Perth', value: 'Asia/Singapore',                   country: 'Singapore' },
+  { label: 'UTC+9  Tokyo / Seoul',               value: 'Asia/Tokyo',                       country: 'Japan' },
+  { label: 'UTC+10  Sydney / Melbourne',         value: 'Australia/Sydney',                 country: 'Australia' },
+  { label: 'UTC+12  Auckland / Fiji',            value: 'Pacific/Auckland',                 country: 'New Zealand' },
+]
+
+const LEVELS = ['beginner', 'intermediate', 'advanced']
+const DURATIONS = [
+  { key: '45', label: '45 min', desc: 'Focused, efficient' },
+  { key: '60', label: '60 min', desc: 'Standard — recommended' },
+  { key: '90', label: '90 min', desc: 'Deep-dive sessions' },
 ]
 
 const STEP_TITLES = [
@@ -47,29 +56,87 @@ const STEP_TITLES = [
   'Certifications',
   'Schedule',
   'About You',
+  'Complete profile',
+  'Device check',
 ]
 
+const LAST_STEP = STEP_TITLES.length - 1 // 5
+
 export default function TeacherApplicationPage() {
-  const [step, setStep] = useState(0) // 0 to 3
-  
+  const [step, setStep] = useState(0) // 0 to LAST_STEP
+
   // Step 0
   const [languagesTaught, setLanguagesTaught] = useState<{ lang: string; proficiency: string }[]>([])
-  
+
   // Step 1
   const [certifications, setCertifications] = useState<string[]>([])
   const [customCert, setCustomCert] = useState('')
-  
+
   // Step 2
   const [timezone, setTimezone] = useState('')
+  const [autoDetectedTz, setAutoDetectedTz] = useState<string | null>(null)
   const [availability, setAvailability] = useState<string[]>([])
-  
+
   // Step 3
   const [introVideoUrl, setIntroVideoUrl] = useState('')
   const [teachingBio, setTeachingBio] = useState('')
-  const [rateExpectation, setRateExpectation] = useState('')
+
+  // Step 4 — complete profile (photo, experience, teaching preferences)
+  const [yearsExperience, setYearsExperience] = useState('')
+  const [preferredLevels, setPreferredLevels] = useState<string[]>([])
+  const [preferredDuration, setPreferredDuration] = useState('60')
+
+  // Step 5 — device check
+  const [stream, setStream] = useState<MediaStream | null>(null)
+  const [cameraOk, setCameraOk] = useState(false)
+  const [micOk, setMicOk] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
 
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  // Auto-detect the teacher's timezone on mount (same UX as student onboarding).
+  useEffect(() => {
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const match = TIMEZONES.find(tz => tz.value === detected)
+    if (match) {
+      setTimezone(match.value)
+      setAutoDetectedTz(match.value)
+    } else {
+      // Fallback: match by UTC offset
+      const offset = -new Date().getTimezoneOffset()
+      const hours = Math.floor(Math.abs(offset) / 60)
+      const mins = Math.abs(offset) % 60
+      const sign = offset >= 0 ? '+' : '-'
+      const offsetStr = `UTC${sign}${hours}${mins ? `:${mins}` : ''}`
+      const fallback = TIMEZONES.find(tz => tz.label.startsWith(offsetStr))
+      if (fallback) {
+        setTimezone(fallback.value)
+        setAutoDetectedTz(fallback.value)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => { stream?.getTracks().forEach(t => t.stop()) }
+  }, [stream])
+
+  useEffect(() => {
+    if (stream && videoRef.current) videoRef.current.srcObject = stream
+  }, [stream])
+
+  function toggleLevel(level: string) {
+    setPreferredLevels(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level])
+  }
+
+  async function testDevices() {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      setStream(s); setCameraOk(true); setMicOk(true)
+    } catch {
+      try { await navigator.mediaDevices.getUserMedia({ audio: true }); setMicOk(true) } catch { /* denied */ }
+    }
+  }
 
   function toggleLanguage(lang: string) {
     setLanguagesTaught(prev => {
@@ -96,11 +163,13 @@ export default function TeacherApplicationPage() {
     if (step === 1) return true // Certifications are optional
     if (step === 2) return !!timezone && availability.length >= 2
     if (step === 3) return teachingBio.trim().length >= 50
+    if (step === 4) return yearsExperience.trim() !== '' && Number(yearsExperience) >= 0 && preferredLevels.length > 0
+    if (step === 5) return true // Device check is skippable
     return false
   }
 
   function handleNext() {
-    if (step < 3) { setStep(s => s + 1); return }
+    if (step < LAST_STEP) { setStep(s => s + 1); return }
     setError(null)
     startTransition(async () => {
       const result = await submitApplication({
@@ -110,20 +179,22 @@ export default function TeacherApplicationPage() {
         teachingBio,
         availability,
         timezone,
-        rateExpectation
+        yearsExperience,
+        preferredLevels,
+        preferredDuration,
       })
       if (result && 'error' in result) setError(result.error)
     })
   }
 
-  const progress = ((step + 1) / 4) * 100
+  const progress = ((step + 1) / STEP_TITLES.length) * 100
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-4 max-w-2xl mx-auto w-full">
-        <Link href="/" className="text-lg font-bold text-brand-500">LangMaster</Link>
-        <span className="text-sm text-gray-400">Step {step + 1} of 4</span>
+        <Link href="/"><BayyanLogo size={28} /></Link>
+        <span className="text-sm text-gray-400">Step {step + 1} of {STEP_TITLES.length}</span>
       </div>
 
       {/* Progress */}
@@ -143,12 +214,16 @@ export default function TeacherApplicationPage() {
               {step === 1 && 'Teaching certifications'}
               {step === 2 && 'Set your schedule'}
               {step === 3 && 'About you'}
+              {step === 4 && 'Complete your profile'}
+              {step === 5 && 'Check your devices'}
             </h1>
             <p className="text-gray-500 text-sm sm:text-base mt-1">
               {step === 0 && 'Select the language you teach and your proficiency level'}
               {step === 1 && 'Optional, but helps show your qualifications to students'}
               {step === 2 && 'When can you teach? Admin schedules groups around these slots'}
               {step === 3 && 'Students will see your bio and video'}
+              {step === 4 && 'Add a photo, your experience, and teaching preferences students will see'}
+              {step === 5 && 'Make sure your camera & microphone work before you teach'}
             </p>
           </div>
 
@@ -254,7 +329,26 @@ export default function TeacherApplicationPage() {
               <div className="space-y-6">
                 <div className="max-w-sm">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Your timezone <span className="text-red-500">*</span></label>
-                  <select value={timezone} onChange={e => setTimezone(e.target.value)}
+
+                  {autoDetectedTz && (() => {
+                    const detected = TIMEZONES.find(tz => tz.value === autoDetectedTz)
+                    if (!detected) return null
+                    return (
+                      <div className="flex items-start gap-3 mb-3 px-4 py-3 bg-green-50 border border-green-200 rounded-xl">
+                        <span className="text-green-500 text-base mt-0.5">✓</span>
+                        <div>
+                          <p className="text-sm font-semibold text-green-800">Timezone auto-detected</p>
+                          <p className="text-xs text-green-700 mt-0.5">
+                            We selected <span className="font-semibold">{detected.label}</span> for{' '}
+                            <span className="font-semibold">{detected.country}</span>.
+                            Change it below if needed.
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })()}
+
+                  <select value={timezone} onChange={e => { setTimezone(e.target.value); setAutoDetectedTz(null) }}
                     className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent bg-white">
                     <option value="" disabled>Select your timezone…</option>
                     {TIMEZONES.map(tz => <option key={tz.value} value={tz.value}>{tz.label}</option>)}
@@ -316,20 +410,116 @@ export default function TeacherApplicationPage() {
                   />
                   <p className="text-xs text-gray-400 mt-1.5">YouTube or Loom. A 1–2 min intro video significantly boosts approval chances.</p>
                 </div>
+              </div>
+            )}
+
+            {/* Step 4: Complete profile */}
+            {step === 4 && (
+              <div className="space-y-8">
+                {/* Profile photo */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Profile photo <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <AvatarUpload name="Teacher" initialUrl={null} fallbackGradient="from-brand-400 to-indigo-500" />
+                  <p className="text-xs text-gray-400 mt-2">A friendly photo helps students trust you and boosts approval chances.</p>
+                </div>
+
+                {/* Years of experience */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Years of teaching experience <span className="text-red-500">*</span></label>
+                  <div className="relative max-w-[200px]">
+                    <input
+                      type="number"
+                      min={0}
+                      max={60}
+                      step={1}
+                      value={yearsExperience}
+                      onChange={e => setYearsExperience(e.target.value)}
+                      placeholder="e.g. 5"
+                      className="w-full pr-16 pl-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">years</span>
+                  </div>
+                </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Rate expectation <span className="text-gray-400 font-normal">(optional, USD/session)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">$</span>
-                    <input type="number" value={rateExpectation} onChange={e => setRateExpectation(e.target.value)}
-                      placeholder="e.g. 25" min={0} step={5}
-                      className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent transition"
-                    />
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Preferred student levels <span className="text-red-500">*</span></label>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    {LEVELS.map(level => {
+                      const active = preferredLevels.includes(level)
+                      return (
+                        <button key={level} type="button" onClick={() => toggleLevel(level)}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            active ? 'border-brand-500 bg-brand-50' : 'border-gray-100 hover:border-brand-200'
+                          }`}>
+                          <div className={`w-5 h-5 rounded flex items-center justify-center mb-2 ${active ? 'bg-brand-500 text-white' : 'bg-gray-200'}`}>
+                            {active ? '✓' : ''}
+                          </div>
+                          <p className={`font-bold capitalize ${active ? 'text-brand-700' : 'text-gray-900'}`}>{level}</p>
+                        </button>
+                      )
+                    })}
                   </div>
-                  <p className="text-xs text-gray-400 mt-1.5">For admin reference only. Final rate agreed during onboarding.</p>
                 </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Standard session duration <span className="text-red-500">*</span></label>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    {DURATIONS.map(d => {
+                      const active = preferredDuration === d.key
+                      return (
+                        <button key={d.key} type="button" onClick={() => setPreferredDuration(d.key)}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            active ? 'border-brand-500 bg-brand-50' : 'border-gray-100 hover:border-brand-200'
+                          }`}>
+                          <div className={`w-4 h-4 rounded-full border-2 mb-2 flex items-center justify-center ${
+                            active ? 'border-brand-500' : 'border-gray-300'
+                          }`}>
+                            {active && <div className="w-2 h-2 rounded-full bg-brand-500" />}
+                          </div>
+                          <p className={`font-bold ${active ? 'text-brand-700' : 'text-gray-900'}`}>{d.label}</p>
+                          <p className="text-xs text-gray-500 mt-1">{d.desc}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Device check */}
+            {step === 5 && (
+              <div className="space-y-6">
+                <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden relative shadow-inner">
+                  {stream ? (
+                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center text-3xl">📹</div>
+                    </div>
+                  )}
+                  <div className="absolute bottom-4 left-4 flex gap-2">
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md ${cameraOk ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white'}`}>
+                      {cameraOk ? '✓ Camera OK' : 'Camera pending'}
+                    </span>
+                    <span className={`px-3 py-1.5 rounded-lg text-xs font-semibold backdrop-blur-md ${micOk ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/10 text-white'}`}>
+                      {micOk ? '✓ Mic OK' : 'Mic pending'}
+                    </span>
+                  </div>
+                </div>
+
+                {!stream && (
+                  <button type="button" onClick={testDevices}
+                    className="w-full py-3 rounded-xl bg-gray-100 text-gray-900 font-semibold text-sm hover:bg-gray-200 transition-colors">
+                    Test Camera & Microphone
+                  </button>
+                )}
+                {stream && (
+                  <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
+                    <p className="text-sm font-semibold text-emerald-700">Looking good!</p>
+                    <p className="text-xs text-emerald-600 mt-0.5">Your devices are working perfectly.</p>
+                  </div>
+                )}
+                <p className="text-xs text-gray-400 text-center">This step is optional — you can skip it and submit your application.</p>
               </div>
             )}
           </div>
@@ -358,7 +548,7 @@ export default function TeacherApplicationPage() {
               disabled={!canAdvance() || isPending}
               className="flex-1 py-3 rounded-xl bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {isPending ? 'Saving…' : step < 3 ? 'Continue →' : 'Submit Application →'}
+              {isPending ? 'Saving…' : step < LAST_STEP ? 'Continue →' : 'Submit Application →'}
             </button>
           </div>
         </div>

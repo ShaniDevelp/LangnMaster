@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { getCourseDetails } from '@/lib/teacher/course-details'
+import { courseLang } from '@/components/CourseBanner'
 import type { Course, CourseModule } from '@/lib/supabase/types'
 
 type Details = {
@@ -30,51 +31,68 @@ export function CourseDetailModal({ courseId, currentUserId, onClose }: { course
   }, [courseId, currentUserId])
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md transition-all duration-300 animate-in fade-in" onClick={onClose}>
-      <div 
-        className="bg-[#f8f9ff] rounded-[2.5rem] shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="relative h-48 bg-gradient-to-br from-brand-600 to-indigo-700 flex-shrink-0">
-          <button 
-            onClick={onClose}
-            className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md flex items-center justify-center text-white transition-all z-10"
-          >
-            ✕
-          </button>
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10" />
-          <div className="absolute bottom-0 left-0 right-0 p-8 pt-20 bg-gradient-to-t from-[#f8f9ff] to-transparent">
-            {details && (
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-brand-500 text-white uppercase tracking-wider">
-                      {details.course.language}
+        {/* Hero banner — image or language gradient, with title overlaid */}
+        {details ? (
+          (() => {
+            const cfg = courseLang(details.course.language)
+            return (
+              <div className={`relative flex-shrink-0 min-h-[180px] flex flex-col justify-end overflow-hidden bg-gradient-to-br ${cfg.gradient}`}>
+                {details.course.thumbnail_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={details.course.thumbnail_url} alt={details.course.name} className="absolute inset-0 w-full h-full object-cover" />
+                )}
+                {/* Scrim so the white text stays readable over any image/gradient */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/10" />
+
+                <button
+                  onClick={onClose}
+                  className="absolute top-4 right-4 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-black/30 text-white hover:bg-black/50 transition-colors backdrop-blur-sm"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+
+                <div className="relative p-6 sm:p-8 text-white">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-sm uppercase tracking-wider">
+                      {cfg.emoji} {details.course.language}
                     </span>
-                    <span className="text-xs font-bold px-3 py-1 rounded-full bg-indigo-500 text-white uppercase tracking-wider">
+                    <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-sm uppercase tracking-wider capitalize">
                       {details.course.level}
                     </span>
                   </div>
-                  <h2 className="text-3xl font-extrabold text-gray-900 leading-tight">
-                    {details.course.name}
-                  </h2>
-                </div>
-                <div className="text-right pb-1">
-                  <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Price</p>
-                  <p className="text-2xl font-black text-brand-600">${details.course.price_usd}</p>
+                  <h2 className="text-2xl font-bold leading-tight">{details.course.name}</h2>
+                  <p className="text-sm text-white/80 mt-1">
+                    Rs {Number(details.course.price_pkr).toLocaleString()} · one-time per course
+                  </p>
                 </div>
               </div>
-            )}
+            )
+          })()
+        ) : (
+          <div className="flex items-center justify-between gap-4 px-6 sm:px-8 py-6 border-b border-gray-100 flex-shrink-0">
+            <h2 className="text-2xl font-bold text-gray-900">Course details</h2>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
+              aria-label="Close"
+            >
+              ✕
+            </button>
           </div>
-        </div>
+        )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-8 pt-4 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 custom-scrollbar">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <div className="w-12 h-12 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
-              <p className="text-gray-400 font-medium animate-pulse">Gathering course intel...</p>
+              <div className="w-10 h-10 border-4 border-brand-100 border-t-brand-500 rounded-full animate-spin" />
+              <p className="text-gray-400 text-sm font-medium">Loading course details…</p>
             </div>
           ) : details ? (
             <div className="grid md:grid-cols-3 gap-8">
@@ -148,6 +166,7 @@ export function CourseDetailModal({ courseId, currentUserId, onClose }: { course
                         {details.otherTeachers.map(t => (
                           <div key={t.id} className="flex items-center gap-3">
                             {t.avatar_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
                               <img src={t.avatar_url} alt={t.name} className="w-8 h-8 rounded-full object-cover border border-gray-100" />
                             ) : (
                               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-[10px] font-bold text-gray-500">
@@ -185,9 +204,9 @@ export function CourseDetailModal({ courseId, currentUserId, onClose }: { course
                   </div>
                 </div>
 
-                <div className="bg-brand-600 rounded-3xl p-6 text-white shadow-xl shadow-brand-100">
+                <div className="bg-brand-500 rounded-3xl p-6 text-white shadow-sm">
                   <p className="text-xs font-bold opacity-80 uppercase tracking-widest mb-2">Max Group Size</p>
-                  <p className="text-3xl font-black mb-1">{details.course.max_group_size} Students</p>
+                  <p className="text-3xl font-extrabold mb-1">{details.course.max_group_size} Students</p>
                   <p className="text-[10px] opacity-70">Small groups for better learning results.</p>
                 </div>
               </div>
@@ -200,12 +219,12 @@ export function CourseDetailModal({ courseId, currentUserId, onClose }: { course
         </div>
         
         {/* Footer */}
-        <div className="p-6 bg-white border-t border-gray-50 flex justify-end">
-          <button 
+        <div className="px-6 sm:px-8 py-4 bg-white border-t border-gray-100 flex justify-end flex-shrink-0">
+          <button
             onClick={onClose}
-            className="px-8 py-3 rounded-2xl bg-gray-900 text-white font-bold text-sm hover:bg-gray-800 transition-all shadow-lg active:scale-95"
+            className="px-8 py-3 rounded-2xl bg-brand-500 text-white font-bold text-sm hover:bg-brand-600 transition-colors"
           >
-            Got it, thanks!
+            Close
           </button>
         </div>
       </div>

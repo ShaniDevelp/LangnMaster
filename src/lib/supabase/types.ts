@@ -87,7 +87,7 @@ export type Database = {
           duration_weeks: number
           sessions_per_week: number
           max_group_size: number
-          price_usd: number
+          price_pkr: number
           thumbnail_url: string | null
           is_active: boolean
           created_at: string
@@ -101,7 +101,7 @@ export type Database = {
           duration_weeks: number
           sessions_per_week?: number
           max_group_size?: number
-          price_usd?: number
+          price_pkr?: number
           thumbnail_url?: string | null
           is_active?: boolean
           created_at?: string
@@ -115,7 +115,7 @@ export type Database = {
           duration_weeks?: number
           sessions_per_week?: number
           max_group_size?: number
-          price_usd?: number
+          price_pkr?: number
           thumbnail_url?: string | null
           is_active?: boolean
         }

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
-import { fulfillCheckoutSession } from '@/lib/student/actions'
+// Stripe disabled — payments handled manually, verified by admin.
+// import { stripe } from '@/lib/stripe'
+// import { fulfillCheckoutSession } from '@/lib/student/actions'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 
@@ -13,38 +14,23 @@ function nextMondayLabel(): string {
   return monday.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 }
 
-type SearchParams = Promise<{ session_id?: string }>
+type SearchParams = Promise<{ course?: string }>
 
+// NOTE: Stripe checkout is disabled. This page is no longer part of the active
+// payment flow (kept for when a gateway is reintroduced). It renders a generic
+// success message if reached directly.
 export default async function CheckoutSuccessPage({ searchParams }: { searchParams: SearchParams }) {
-  const { session_id } = await searchParams
-  if (!session_id) redirect('/student/courses')
+  const { course: courseId } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Retrieve session from Stripe to confirm payment and get metadata
   let courseName = 'your course'
-  let amount = ''
-  try {
-    const session = await stripe.checkout.sessions.retrieve(session_id)
-
-    // Fulfillment is handled by webhook, but call here as backup
-    // (handles case where webhook hasn't fired yet)
-    if (session.payment_status === 'paid') {
-      await fulfillCheckoutSession(session_id)
-      const lineItem = session.amount_total
-      if (lineItem) amount = `$${(lineItem / 100).toFixed(2)}`
-    }
-
-    // Get course name from DB via metadata
-    const courseId = session.metadata?.course_id
-    if (courseId) {
-      const { data } = await supabase.from('courses').select('name').eq('id', courseId).single()
-      if (data) courseName = (data as { name: string }).name
-    }
-  } catch {
-    // Stripe retrieval failed — enrollment created by webhook, show generic success
+  const amount = ''
+  if (courseId) {
+    const { data } = await supabase.from('courses').select('name').eq('id', courseId).single()
+    if (data) courseName = (data as { name: string }).name
   }
 
   const monday = nextMondayLabel()

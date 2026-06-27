@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation'
 import { signOut } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
 import { UnreadMessagesBadge } from '@/components/chat/UnreadMessagesBadge'
+import { BayyanLogo } from '@/components/BayyanLogo'
 
 const NAV = [
   { href: '/student/dashboard', icon: '🏠', label: 'Home' },
@@ -21,8 +22,8 @@ export function SidebarNav({ profile }: { profile: Profile }) {
       {/* ── Desktop sidebar ─────────────────────────────────── */}
       <aside className="hidden lg:flex flex-col fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-100 z-40">
         <div className="px-6 py-5 border-b border-gray-100">
-          <Link href="/student/dashboard" className="text-xl font-bold text-brand-500">
-            LangMaster
+          <Link href="/student/dashboard" aria-label="Bayyan home">
+            <BayyanLogo size={30} />
           </Link>
           <p className="text-[11px] text-gray-400 mt-0.5 font-medium uppercase tracking-wider">Student Portal</p>
         </div>
@@ -56,7 +57,7 @@ export function SidebarNav({ profile }: { profile: Profile }) {
             href="/student/profile"
             className="flex items-center gap-3 px-2 py-2 rounded-xl hover:bg-gray-50 transition-colors"
           >
-            <Avatar name={profile.name} />
+            <Avatar name={profile.name} url={profile.avatar_url ?? null} />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{profile.name}</p>
               <p className="text-xs text-gray-400">Student</p>
@@ -104,7 +105,11 @@ export function SidebarNav({ profile }: { profile: Profile }) {
   )
 }
 
-function Avatar({ name }: { name: string }) {
+function Avatar({ name, url }: { name: string; url?: string | null }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+  }
   return (
     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
       {name.charAt(0).toUpperCase()}

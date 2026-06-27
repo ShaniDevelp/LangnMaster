@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { processPayout, resolveGroupAction } from '@/lib/admin/phase4-actions'
 
 type Payout = {
@@ -125,7 +126,7 @@ export function RequestsClient({ payouts, groupActions, courseRequests }: { payo
                             <span className="font-medium text-gray-900">{p.profiles?.name}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 font-bold text-gray-900">${p.amount.toFixed(2)}</td>
+                        <td className="px-6 py-4 font-bold text-gray-900">Rs {p.amount.toLocaleString()}</td>
                         <td className="px-6 py-4">
                           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${statusColor[p.status]}`}>
                             {p.status}
@@ -221,18 +222,27 @@ export function RequestsClient({ payouts, groupActions, courseRequests }: { payo
                       </p>
                     </div>
                   </div>
-                  {c.status === 'pending' && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button disabled={isPending} onClick={() => handleResolveCourseRequest(c.id, 'rejected')}
-                        className="px-4 py-2 rounded-xl border border-gray-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-40">
-                        Reject
-                      </button>
-                      <button disabled={isPending} onClick={() => handleResolveCourseRequest(c.id, 'approved')}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors disabled:opacity-40 shadow-sm">
-                        Approve
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Link
+                      href={`/teachers/${c.teacher_id}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-gray-200 text-gray-700 text-xs font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                      👤 View profile
+                    </Link>
+                    {c.status === 'pending' && (
+                      <>
+                        <button disabled={isPending} onClick={() => handleResolveCourseRequest(c.id, 'rejected')}
+                          className="px-4 py-2 rounded-xl border border-gray-200 text-red-600 text-xs font-semibold hover:bg-red-50 transition-colors disabled:opacity-40">
+                          Reject
+                        </button>
+                        <button disabled={isPending} onClick={() => handleResolveCourseRequest(c.id, 'approved')}
+                          className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition-colors disabled:opacity-40 shadow-sm">
+                          Approve
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

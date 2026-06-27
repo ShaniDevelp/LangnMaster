@@ -107,6 +107,16 @@ export default function DeviceCheckPage() {
     }
   }
 
+  function stopCheck() {
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setStream(null)
+    setCamState('idle')
+    setMicState('idle')
+    setErrorMsg('')
+  }
+
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop())
@@ -153,6 +163,14 @@ export default function DeviceCheckPage() {
               <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
               Live preview
             </div>
+          )}
+          {camState === 'ok' && (
+            <button
+              onClick={stopCheck}
+              className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white text-xs px-3 py-1 rounded-full transition-colors"
+            >
+              Stop test
+            </button>
           )}
         </div>
 

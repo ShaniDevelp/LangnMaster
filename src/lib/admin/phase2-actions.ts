@@ -2,6 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
+import { sendGroupPublishedEmails, sendGroupProposalEmail } from '@/lib/email/group-notify'
 
 type ManualGroupParams = {
   enrollmentIds: string[]
@@ -113,6 +115,26 @@ export async function assignManualGroup(params: ManualGroupParams): Promise<{ er
         payload: { group_id: group.id }
       })
     }
+
+    // Group-published emails — teacher + each student. Fire-and-forget.
+    const studentIds = enrollments.map(e => e.user_id)
+    after(() =>
+      sendGroupPublishedEmails({
+        courseId: params.courseId,
+        teacherId: params.teacherId,
+        studentIds,
+      }),
+    )
+  } else {
+    // Acceptance gate on — email teacher to respond to the request. No student
+    // emails until the teacher accepts.
+    after(() =>
+      sendGroupProposalEmail({
+        courseId: params.courseId,
+        teacherId: params.teacherId,
+        studentCount: enrollments.length,
+      }),
+    )
   }
 
   revalidatePath('/admin/enrollments')

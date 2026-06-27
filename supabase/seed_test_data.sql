@@ -1,5 +1,5 @@
 -- ============================================================
--- LangMaster — Test Seed Data (course_modules + courses)
+-- Bayyan — Test Seed Data (course_modules + courses)
 -- ============================================================
 -- Run AFTER cleanup.sql.
 -- This seeds:
@@ -16,7 +16,7 @@ truncate public.course_modules cascade;
 delete from public.courses;
 
 insert into public.courses
-  (id, name, description, language, level, duration_weeks, sessions_per_week, max_group_size, price_usd, is_active)
+  (id, name, description, language, level, duration_weeks, sessions_per_week, max_group_size, price_pkr, is_active)
 values
   (
     'a1000000-0000-0000-0000-000000000001',

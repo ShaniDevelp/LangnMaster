@@ -81,12 +81,18 @@ export async function savePostCall(
   // Verify user is the teacher of this session
   const { data: sessionData } = await admin
     .from('sessions')
-    .select('group_id, groups!inner(teacher_id)')
+    .select('group_id, scheduled_at, groups!inner(teacher_id)')
     .eq('id', sessionId)
     .single()
 
   if ((sessionData as any)?.groups?.teacher_id !== user.id) {
     return { error: 'Not authorized to complete this session' }
+  }
+
+  // Cannot complete a session before its scheduled start time
+  const scheduledAt = (sessionData as any)?.scheduled_at
+  if (scheduledAt && new Date(scheduledAt) > new Date()) {
+    return { error: "Can't close session before its scheduled time." }
   }
 
   // 1. Update session fields + mark completed

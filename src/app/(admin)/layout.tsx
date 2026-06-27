@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { signOutAdmin } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
 
 const adminNav = [
   { href: '/admin/dashboard', icon: '📊', label: 'Overview' },
+  { href: '/admin/courses', icon: '📚', label: 'Courses' },
   { href: '/admin/enrollments', icon: '📋', label: 'Enrollments' },
   { href: '/admin/students', icon: '🎓', label: 'Students' },
   { href: '/admin/teachers', icon: '👨‍🏫', label: 'Teachers' },
@@ -31,7 +33,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Sidebar — desktop */}
       <aside className="hidden lg:flex flex-col w-60 bg-white border-r border-gray-100 fixed inset-y-0">
         <div className="px-6 py-5 border-b border-gray-100">
-          <span className="text-lg font-bold text-[#6c4ff5]">LangMaster</span>
+          <BayyanLogo size={28} />
           <span className="ml-2 text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Admin</span>
         </div>
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -61,7 +63,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <div className="flex-1 lg:ml-60 flex flex-col">
         {/* Mobile header */}
         <header className="lg:hidden sticky top-0 z-40 bg-white/80 backdrop-blur border-b border-gray-100 px-4 h-14 flex items-center justify-between">
-          <span className="font-bold text-[#6c4ff5]">LangMaster Admin</span>
+          <span className="inline-flex items-center gap-2"><BayyanLogo size={24} /><span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Admin</span></span>
           <form action={signOutAdmin}>
             <button type="submit" className="text-xs text-gray-400">Sign out</button>
           </form>

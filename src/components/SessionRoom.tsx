@@ -1,19 +1,24 @@
 'use client'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { VideoCallRoom } from '@/components/VideoCallRoom'
 import { rateSession } from '@/lib/student/actions'
+import { createClient } from '@/lib/supabase/client'
 
 export type SessionRoomProps = {
   roomToken: string
   sessionId: string
   userId: string
   userName: string
+  userAvatarUrl?: string | null
   courseName: string
   courseId: string
   teacherId: string | null
   teacherName: string | null
+  teacherAvatarUrl?: string | null
   partnerName: string | null
+  partnerAvatarUrl?: string | null
   scheduledAt: string
   durationMinutes: number
   prepNotes: string | null
@@ -27,7 +32,11 @@ export type SessionRoomProps = {
 
 type Phase = 'lobby' | 'call' | 'complete'
 
-function Avatar({ name, variant = 'default' }: { name: string; variant?: 'teacher' | 'default' }) {
+function Avatar({ name, url, variant = 'default' }: { name: string; url?: string | null; variant?: 'teacher' | 'default' }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} className="w-9 h-9 rounded-xl object-cover flex-shrink-0" />
+  }
   return (
     <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm uppercase flex-shrink-0 ${
       variant === 'teacher'
@@ -42,96 +51,154 @@ function Avatar({ name, variant = 'default' }: { name: string; variant?: 'teache
 function PreviewVideo() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const rafRef = useRef<number>(0)
+  const [active, setActive] = useState(false)
+  const [testing, setTesting] = useState(false)
   const [camOk, setCamOk] = useState<boolean | null>(null)
   const [micLevel, setMicLevel] = useState(0)
 
-  useEffect(() => {
-    let mounted = true
-    const rafId = { current: 0 }
+  function stopTest() {
+    cancelAnimationFrame(rafRef.current)
+    ctxRef.current?.close().catch(() => {})
+    ctxRef.current = null
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setActive(false)
+    setCamOk(null)
+    setMicLevel(0)
+  }
 
-    async function init() {
-      try {
-        const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        if (!mounted) { s.getTracks().forEach(t => t.stop()); return }
-        streamRef.current = s
-        if (videoRef.current) videoRef.current.srcObject = s
-        setCamOk(true)
+  async function startTest() {
+    setTesting(true)
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      streamRef.current = s
+      if (videoRef.current) videoRef.current.srcObject = s
+      setActive(true)
+      setCamOk(true)
 
-        const ctx = new AudioContext()
-        const src = ctx.createMediaStreamSource(s)
-        const analyser = ctx.createAnalyser()
-        analyser.fftSize = 128
-        src.connect(analyser)
-        const data = new Uint8Array(analyser.frequencyBinCount)
-        function tick() {
-          analyser.getByteFrequencyData(data)
-          const avg = data.reduce((a, b) => a + b, 0) / data.length
-          setMicLevel(Math.min(avg / 60, 1))
-          rafId.current = requestAnimationFrame(tick)
-        }
-        tick()
-      } catch {
-        if (mounted) setCamOk(false)
+      const ctx = new AudioContext()
+      ctxRef.current = ctx
+      const src = ctx.createMediaStreamSource(s)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 128
+      src.connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      function tick() {
+        analyser.getByteFrequencyData(data)
+        const avg = data.reduce((a, b) => a + b, 0) / data.length
+        setMicLevel(Math.min(avg / 60, 1))
+        rafRef.current = requestAnimationFrame(tick)
       }
+      tick()
+    } catch {
+      setActive(true)
+      setCamOk(false)
+    } finally {
+      setTesting(false)
     }
-    init()
+  }
 
-    return () => {
-      mounted = false
-      cancelAnimationFrame(rafId.current)
-      streamRef.current?.getTracks().forEach(t => t.stop())
-    }
+  // stop tracks on unmount
+  useEffect(() => () => {
+    cancelAnimationFrame(rafRef.current)
+    ctxRef.current?.close().catch(() => {})
+    streamRef.current?.getTracks().forEach(t => t.stop())
   }, [])
 
   return (
     <div className="space-y-3">
       <div className="relative aspect-video bg-gray-900 rounded-xl overflow-hidden">
-        {camOk === false && (
+        {!active && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-3">
+            <span className="text-3xl">📷</span>
+            <p className="text-sm font-semibold text-gray-400">Camera off</p>
+            <button
+              onClick={startTest}
+              disabled={testing}
+              className="px-5 py-2 bg-white text-gray-900 font-semibold text-sm rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-60"
+            >
+              {testing ? 'Starting…' : 'Start test'}
+            </button>
+          </div>
+        )}
+        {active && camOk === false && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 gap-2">
             <span className="text-3xl">📵</span>
             <p className="text-sm font-semibold text-gray-400">Camera denied</p>
           </div>
         )}
         <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
-        {camOk && (
+        {active && camOk && (
           <div className="absolute bottom-3 left-3 bg-black/50 backdrop-blur text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
             Live Preview
           </div>
         )}
+        {active && (
+          <button
+            onClick={stopTest}
+            className="absolute top-3 right-3 bg-black/40 hover:bg-black/60 text-white text-xs font-semibold px-3 py-1 rounded-full transition-colors"
+          >
+            Stop test
+          </button>
+        )}
       </div>
 
-      <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">
-        <span className="text-base">🎙️</span>
-        <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-          <div
-            className="h-1.5 rounded-full transition-all duration-100"
-            style={{
-              width: `${micLevel * 100}%`,
-              background: micLevel > 0.8 ? '#ef4444' : '#6c4ff5',
-            }}
-          />
+      {active && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 rounded-xl border border-gray-100">
+          <span className="text-base">🎙️</span>
+          <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-1.5 rounded-full transition-all duration-100"
+              style={{
+                width: `${micLevel * 100}%`,
+                background: micLevel > 0.8 ? '#ef4444' : '#6c4ff5',
+              }}
+            />
+          </div>
+          <span className="text-xs font-semibold text-gray-400">
+            {camOk ? 'Mic active' : 'No input'}
+          </span>
         </div>
-        <span className="text-xs font-semibold text-gray-400">
-          {camOk === null ? 'Checking...' : camOk ? 'Mic active' : 'No input'}
-        </span>
-      </div>
+      )}
     </div>
   )
 }
 
 function PostCallScreen({
-  courseId, teacherId, courseName,
-  nextSessionAt, nextSessionToken,
+  sessionId, courseId, teacherId, courseName,
+  nextSessionAt, nextSessionToken, onRejoin,
 }: {
-  courseId: string; teacherId: string | null; courseName: string;
-  nextSessionAt: string | null; nextSessionToken: string | null;
+  sessionId: string; courseId: string; teacherId: string | null; courseName: string;
+  nextSessionAt: string | null; nextSessionToken: string | null; onRejoin: () => void;
 }) {
   const [rating, setRating] = useState(0)
   const [hover, setHover] = useState(0)
   const [body, setBody] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [isPending, startTransition] = useTransition()
+  // null = still checking; teacher must mark session completed before feedback
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    let active = true
+    async function check() {
+      const { data } = await supabase
+        .from('sessions')
+        .select('status')
+        .eq('id', sessionId)
+        .single()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (active && data) setSessionStatus((data as any).status)
+    }
+    check()
+    const id = setInterval(check, 5000)
+    return () => { active = false; clearInterval(id) }
+  }, [sessionId])
 
   function submit() {
     if (rating === 0) return
@@ -146,6 +213,45 @@ function PostCallScreen({
       weekday: 'short', month: 'short', day: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true,
     })
+  }
+
+  // Session not yet completed by the teacher — gate feedback, offer rejoin
+  if (sessionStatus !== 'completed') {
+    const checking = sessionStatus === null
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+          <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6">
+            {checking ? '⏳' : '🟢'}
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {checking ? 'Checking session…' : 'Session still active'}
+          </h1>
+          <p className="text-gray-500 text-sm leading-relaxed mb-8">
+            {checking
+              ? 'One moment.'
+              : 'You left, but the class is still in progress. You can rejoin anytime. Once the teacher ends the class, you can leave your feedback here.'}
+          </p>
+
+          {!checking && (
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={onRejoin}
+                className="w-full bg-[#6c4ff5] hover:bg-[#5c3de8] text-white font-semibold py-3 rounded-xl transition-colors active:scale-95"
+              >
+                Rejoin room
+              </button>
+              <Link
+                href="/student/sessions"
+                className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition-colors py-1"
+              >
+                Leave for now
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -248,8 +354,8 @@ function ordinal(n: number) {
 }
 
 export default function SessionRoom({
-  roomToken, sessionId, userId, userName,
-  courseName, courseId, teacherId, teacherName, partnerName,
+  roomToken, sessionId, userId, userName, userAvatarUrl,
+  courseName, courseId, teacherId, teacherName, teacherAvatarUrl, partnerName, partnerAvatarUrl,
   scheduledAt, durationMinutes, prepNotes,
   weekNumber, weekTopic,
   nextSessionAt, nextSessionToken,
@@ -278,20 +384,22 @@ export default function SessionRoom({
   if (phase === 'complete') {
     return (
       <PostCallScreen
+        sessionId={sessionId}
         courseId={courseId}
         teacherId={teacherId}
         courseName={courseName}
         nextSessionAt={nextSessionAt}
         nextSessionToken={nextSessionToken}
+        onRejoin={() => setPhase('call')}
       />
     )
   }
 
   const participants = [
-    { name: userName, role: 'Student (You)', variant: 'default' as const },
-    teacherName ? { name: teacherName, role: 'Teacher', variant: 'teacher' as const } : null,
-    partnerName ? { name: partnerName, role: 'Learning Partner', variant: 'default' as const } : null,
-  ].filter(Boolean) as { name: string; role: string; variant: 'teacher' | 'default' }[]
+    { name: userName, role: 'Student (You)', variant: 'default' as const, url: userAvatarUrl ?? null },
+    teacherName ? { name: teacherName, role: 'Teacher', variant: 'teacher' as const, url: teacherAvatarUrl ?? null } : null,
+    partnerName ? { name: partnerName, role: 'Learning Partner', variant: 'default' as const, url: partnerAvatarUrl ?? null } : null,
+  ].filter(Boolean) as { name: string; role: string; variant: 'teacher' | 'default'; url: string | null }[]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -305,13 +413,18 @@ export default function SessionRoom({
             >
               ←
             </Link>
-            <span className="font-bold text-[#6c4ff5]">LangMaster</span>
+            <BayyanLogo size={24} />
             <span className="hidden sm:inline text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Pre-Class Lobby</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold uppercase">
-              {userName.charAt(0)}
-            </div>
+            {userAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={userAvatarUrl} alt={userName} className="w-7 h-7 rounded-lg object-cover" />
+            ) : (
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold uppercase">
+                {userName.charAt(0)}
+              </div>
+            )}
             <span className="hidden sm:block text-sm font-medium text-gray-700">{userName}</span>
           </div>
         </div>
@@ -375,7 +488,7 @@ export default function SessionRoom({
               <div className="space-y-3">
                 {participants.map(p => (
                   <div key={p.role} className="flex items-center gap-3">
-                    <Avatar name={p.name} variant={p.variant} />
+                    <Avatar name={p.name} url={p.url} variant={p.variant} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-900 truncate">{p.name}</p>
                       <p className="text-xs text-gray-400">{p.role}</p>

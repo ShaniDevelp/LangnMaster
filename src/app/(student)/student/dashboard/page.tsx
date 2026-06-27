@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import type { Course, Enrollment, Session, Group, Profile } from '@/lib/supabase/types'
 import { activePeriodsLocal, DAYS as AVAIL_DAYS, PERIOD_LABEL } from '@/lib/availability'
 import { MessageButton } from '@/components/MessageButton'
+import { CourseBannerBg } from '@/components/CourseBanner'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -16,7 +17,7 @@ type SessionRow = Session & {
 }
 type TeacherRow = {
   teacher_id: string
-  profiles: Pick<Profile, 'id' | 'name' | 'bio'> & {
+  profiles: Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url'> & {
     years_experience?: number
     languages_taught?: { lang: string; proficiency: string }[]
     rating?: number
@@ -29,28 +30,17 @@ type GroupDetailRow = {
   week_start: string
   status: string
   courses: Pick<Course, 'name' | 'language' | 'sessions_per_week' | 'duration_weeks'> | null
-  profiles: Pick<Profile, 'id' | 'name' | 'bio'> & {
+  profiles: Pick<Profile, 'id' | 'name' | 'bio' | 'avatar_url'> & {
     years_experience?: number
     rating?: number
     languages_taught?: { lang: string; proficiency: string }[]
   } | null
 }
-type PartnerRow = {
-  user_id: string
-  profiles: Pick<Profile, 'id' | 'name'> | null
-}
-
 // ── Static config ─────────────────────────────────────────────────────────────
 
 const LANG_EMOJI: Record<string, string> = {
   English: '🇬🇧', Spanish: '🇪🇸', French: '🇫🇷',
   German: '🇩🇪', Mandarin: '🇨🇳', Japanese: '🇯🇵',
-}
-const LANG_GRAD: Record<string, string> = {
-  English: 'from-blue-500 to-indigo-600',
-  Spanish: 'from-red-500 to-orange-500',
-  French:  'from-blue-600 to-blue-800',
-  German:  'from-yellow-500 to-amber-600',
 }
 const STATUS_STYLE: Record<string, string> = {
   pending:   'bg-amber-100 text-amber-700',
@@ -148,12 +138,17 @@ export default async function StudentDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profileRaw } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const profile = profileRaw as (Profile & { availability?: string[] | null; timezone?: string | null }) | null
+  // These three only depend on the user — fetch them together instead of in a
+  // sequential waterfall (saves two cross-region round trips per navigation).
+  const [profileRes, memberGroupsRes, enrollmentsRes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase.from('group_members').select('group_id').eq('user_id', user.id),
+    supabase.from('enrollments').select('*, courses(*)').eq('user_id', user.id).order('enrolled_at', { ascending: false }),
+  ])
 
-  const { data: memberGroupsRaw } = await supabase
-    .from('group_members').select('group_id').eq('user_id', user.id)
-  const allGroupIds = ((memberGroupsRaw ?? []) as { group_id: string }[]).map(m => m.group_id)
+  const profile = profileRes.data as (Profile & { availability?: string[] | null; timezone?: string | null }) | null
+
+  const allGroupIds = ((memberGroupsRes.data ?? []) as { group_id: string }[]).map(m => m.group_id)
 
   // Exclude groups still pending teacher acceptance — student shouldn't see them yet
   const { data: acceptedGroupsRaw } = allGroupIds.length > 0
@@ -163,67 +158,71 @@ export default async function StudentDashboard() {
 
   let upcomingSessions: SessionRow[] = []
   let completedCount = 0
-  let groupDetails: GroupDetailRow | null = null
-  let partner: PartnerRow | null = null
-
   let missedSessions: SessionRow[] = []
+  let activeGroups: GroupDetailRow[] = []
+  const completedByGroup: Record<string, number> = {}
+  const partnersByGroup: Record<string, string[]> = {}
 
   if (groupIds.length > 0) {
-    const [sessionsRes, completedRes, groupRes, missedRes] = await Promise.all([
+    const nowIso = new Date().toISOString()
+    const [sessionsRes, completedRes, missedRes, activeGroupsRes, completedRowsRes, membersRes] = await Promise.all([
       supabase
         .from('sessions')
         .select('*, groups(*, courses(name, language), profiles:teacher_id(name))')
         .in('group_id', groupIds)
         .in('status', ['scheduled', 'active'])
-        .gte('scheduled_at', new Date().toISOString())
+        .gte('scheduled_at', nowIso)
         .order('scheduled_at', { ascending: true })
-        .limit(8),
+        .limit(12),
       supabase
         .from('sessions')
         .select('id', { count: 'exact', head: true })
         .in('group_id', groupIds)
         .eq('status', 'completed'),
       supabase
-        .from('groups')
-        .select('id, course_id, teacher_id, week_start, status, courses(name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name, bio, years_experience, rating, languages_taught)')
-        .in('id', groupIds)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
         .from('sessions')
         .select('*, groups(*, courses(name, language), profiles:teacher_id(name))')
         .in('group_id', groupIds)
         .eq('status', 'scheduled')
-        .lt('scheduled_at', new Date().toISOString())
+        .lt('scheduled_at', nowIso)
         .order('scheduled_at', { ascending: false })
         .limit(5),
+      // All active groups — one progress card per course
+      supabase
+        .from('groups')
+        .select('id, course_id, teacher_id, week_start, status, courses(name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name, bio, avatar_url, years_experience, rating, languages_taught)')
+        .in('id', groupIds)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false }),
+      // Completed sessions tallied per group for per-course progress
+      supabase
+        .from('sessions')
+        .select('group_id')
+        .in('group_id', groupIds)
+        .eq('status', 'completed'),
+      // All group members for classmate names per group
+      supabase
+        .from('group_members')
+        .select('group_id, user_id, profiles(id, name, avatar_url)')
+        .in('group_id', groupIds),
     ])
 
     upcomingSessions = (sessionsRes.data ?? []) as unknown as SessionRow[]
     completedCount = completedRes.count ?? 0
-    groupDetails = groupRes.data as unknown as GroupDetailRow | null
     missedSessions = (missedRes.data ?? []) as unknown as SessionRow[]
+    activeGroups = (activeGroupsRes.data ?? []) as unknown as GroupDetailRow[]
 
-    // Fetch partner if we have a group
-    if (groupDetails) {
-      const { data: membersRaw } = await supabase
-        .from('group_members')
-        .select('user_id, profiles(id, name)')
-        .eq('group_id', groupDetails.id)
-        .neq('user_id', user.id)
-        .limit(1)
-        .maybeSingle()
-      partner = membersRaw as unknown as PartnerRow | null
+    for (const r of (completedRowsRes.data ?? []) as { group_id: string }[]) {
+      completedByGroup[r.group_id] = (completedByGroup[r.group_id] ?? 0) + 1
+    }
+    for (const m of (membersRes.data ?? []) as unknown as { group_id: string; user_id: string; profiles: { name: string | null } | null }[]) {
+      if (m.user_id === user.id) continue
+      ;(partnersByGroup[m.group_id] ??= []).push(m.profiles?.name?.split(' ')[0] ?? 'Classmate')
     }
   }
 
-  const { data: enrollmentsRaw } = await supabase
-    .from('enrollments').select('*, courses(*)').eq('user_id', user.id).order('enrolled_at', { ascending: false })
-  const enrollments = (enrollmentsRaw ?? []) as unknown as EnrollmentRow[]
+  const enrollments = (enrollmentsRes.data ?? []) as unknown as EnrollmentRow[]
 
-  const isAssigned = groupIds.length > 0
   const pendingEnrollments = enrollments.filter(e => e.status === 'pending')
   const hasPending = pendingEnrollments.length > 0
   const nextSession = upcomingSessions[0]
@@ -234,6 +233,36 @@ export default async function StudentDashboard() {
   )
   const hasUnpaidSessions = unpaidAssignedEnrollments.length > 0
 
+  // Per-course payment gate — a session is locked ONLY if ITS OWN course is
+  // unpaid. Previously the lock was global, so paying for course 1 still showed
+  // its sessions locked whenever an unrelated course 2 was unpaid.
+  const unpaidCourseIds = new Set(unpaidAssignedEnrollments.map(e => e.course_id))
+
+  // Per-course progress — one summary per active group so each course's
+  // progress is shown separately on the dashboard.
+  const activeCourses = activeGroups.map(g => {
+    const c = g.courses as { name?: string; language?: string; sessions_per_week?: number; duration_weeks?: number } | null
+    const totalWeeks = c?.duration_weeks ?? 0
+    return {
+      groupId: g.id,
+      courseId: g.course_id,
+      name: c?.name ?? 'Course',
+      language: c?.language ?? '',
+      teacherId: g.teacher_id,
+      teacherName: g.profiles?.name ?? 'Your teacher',
+      teacherAvatar: g.profiles?.avatar_url ?? null,
+      week: currentWeekNumber(g.week_start),
+      totalWeeks,
+      done: completedByGroup[g.id] ?? 0,
+      total: totalWeeks * (c?.sessions_per_week ?? 0),
+      partners: partnersByGroup[g.id] ?? [],
+      isUnpaid: unpaidCourseIds.has(g.course_id),
+    }
+  })
+
+  const nextSessionCourseId = nextSession?.groups?.course_id
+  const nextSessionUnpaid = nextSessionCourseId ? unpaidCourseIds.has(nextSessionCourseId) : false
+
   // Fetch teacher pool for pending courses
   let pendingTeachers: TeacherRow[] = []
   if (hasPending) {
@@ -241,7 +270,7 @@ export default async function StudentDashboard() {
     if (pendingCourseIds.length > 0) {
       const { data } = await supabase
         .from('course_teachers')
-        .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio, years_experience, languages_taught, rating)')
+        .select('teacher_id, profiles!course_teachers_teacher_id_fkey(id, name, bio, avatar_url, years_experience, languages_taught, rating)')
         .in('course_id', pendingCourseIds)
         .limit(4)
       pendingTeachers = (data ?? []) as unknown as TeacherRow[]
@@ -255,10 +284,6 @@ export default async function StudentDashboard() {
   const slots = slotsFromAvailability(profile?.availability ?? null, profile?.timezone ?? null)
   const earliestPending = pendingEnrollments[0]
   const refundLeft = earliestPending ? refundDaysLeft(earliestPending.enrolled_at) : 0
-
-  const currentWeek = groupDetails ? currentWeekNumber(groupDetails.week_start) : 0
-  const totalWeeks = (groupDetails?.courses as { duration_weeks?: number } | null)?.duration_weeks ?? 0
-  const totalSessions = totalWeeks * ((groupDetails?.courses as { sessions_per_week?: number } | null)?.sessions_per_week ?? 0)
 
   return (
     <div className="space-y-6 lg:space-y-8">
@@ -336,7 +361,7 @@ export default async function StudentDashboard() {
         {/* Main state card — 3/5 cols */}
         <div className="lg:col-span-3">
           {nextSession ? (
-            <ActiveSessionCard session={nextSession} isUnpaid={hasUnpaidSessions} unpaidCourseId={unpaidAssignedEnrollments[0]?.course_id} />
+            <ActiveSessionCard session={nextSession} isUnpaid={nextSessionUnpaid} unpaidCourseId={nextSessionCourseId} />
           ) : hasPending ? (
             <PendingStatusCard
               nextMonday={monday}
@@ -352,9 +377,9 @@ export default async function StudentDashboard() {
         <div className="lg:col-span-2 flex flex-col gap-4">
           <div className="flex overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3 lg:grid-cols-1 gap-3 scrollbar-hide">
             {[
-              { icon: '🎯', label: 'Sessions done', value: String(completedCount) },
-              { icon: '📅', label: 'Upcoming',      value: String(upcomingSessions.length) },
-              { icon: '📖', label: 'Current week',  value: currentWeek > 0 ? `${currentWeek}/${totalWeeks}` : '—' },
+              { icon: '🎯', label: 'Sessions done',  value: String(completedCount) },
+              { icon: '📅', label: 'Upcoming',       value: String(upcomingSessions.length) },
+              { icon: '📚', label: 'Active courses', value: String(activeCourses.length) },
             ].map(s => (
               <div key={s.label} className="flex-shrink-0 w-36 sm:w-auto bg-white rounded-2xl p-4 lg:p-5 border border-gray-100 shadow-sm flex lg:flex-row flex-col lg:items-center gap-2 lg:gap-3">
                 <div className="text-xl lg:text-3xl">{s.icon}</div>
@@ -384,100 +409,73 @@ export default async function StudentDashboard() {
         </div>
       </div>
 
-      {/* ── Stage 6: Active group sections ─────────────────────── */}
-      {isAssigned && groupDetails && (
+      {/* ── Active courses — one progress card per course ──────── */}
+      {activeCourses.length > 0 && (
         <>
-          {/* Your Group */}
           <section>
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Your Group</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Your Active Courses</h2>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-              {/* Teacher card */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-start gap-4">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${AVATAR_GRADS[0]} flex items-center justify-center text-white font-bold text-xl flex-shrink-0`}>
-                  {groupDetails.profiles?.name?.charAt(0)?.toUpperCase() ?? 'T'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <p className="font-bold text-gray-900">{groupDetails.profiles?.name ?? 'Your Teacher'}</p>
-                    <span className="text-[10px] bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">Teacher</span>
-                  </div>
-                  {groupDetails.profiles && (
-                    <p className="text-xs text-gray-400 mb-1.5">
-                      {groupDetails.profiles.years_experience ?? 0}y exp · ★ {Number(groupDetails.profiles.rating ?? 0).toFixed(1)}
-                    </p>
-                  )}
-                  {groupDetails.profiles?.languages_taught?.length ? (
-                    <div className="flex flex-wrap gap-1 mb-2">
-                      {groupDetails.profiles.languages_taught.slice(0, 3).map(l => (
-                        <span key={l.lang} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{l.lang}</span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {groupDetails.profiles?.bio && (
-                    <p className="text-xs text-gray-500 leading-relaxed line-clamp-2">{groupDetails.profiles.bio}</p>
-                  )}
-                  {groupDetails.teacher_id && (
-                    <MessageButton
-                      userId={groupDetails.teacher_id}
-                      basePath="/student/messages"
-                      label="Message teacher"
-                    />
-                  )}
-                </div>
-              </div>
-
-              {/* Partner + course progress card */}
-              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-4">
-                {/* Partner */}
-                <div className="flex items-center gap-3 justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${AVATAR_GRADS[1]} flex items-center justify-center text-white font-bold flex-shrink-0`}>
-                      {partner?.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-900 text-sm truncate">{partner?.profiles?.name?.split(' ')[0] ?? 'Your partner'}</p>
-                        <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-full flex-shrink-0">Partner</span>
+              {activeCourses.map(c => {
+                const pct = Math.min((c.done / Math.max(c.total, 1)) * 100, 100)
+                return (
+                  <div
+                    key={c.groupId}
+                    className={`bg-white rounded-2xl border shadow-sm p-5 ${c.isUnpaid ? 'border-orange-200' : 'border-gray-100'}`}
+                  >
+                    <div className="flex items-start gap-4 mb-4">
+                      {c.teacherAvatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.teacherAvatar} alt={c.teacherName} className="w-12 h-12 rounded-2xl object-cover flex-shrink-0" />
+                      ) : (
+                        <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${AVATAR_GRADS[0]} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
+                          {c.teacherName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{LANG_EMOJI[c.language] ?? '🌍'}</span>
+                          <p className="font-bold text-gray-900 truncate">{c.name}</p>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">
+                          with {c.teacherName}{c.partners.length > 0 ? ` · ${c.partners.join(', ')}` : ''}
+                        </p>
                       </div>
-                      <p className="text-xs text-gray-400">Study partner in your group</p>
+                      {c.isUnpaid ? (
+                        <span className="text-[10px] bg-orange-100 text-orange-700 font-bold px-2 py-0.5 rounded-full flex-shrink-0">🔒 Unpaid</span>
+                      ) : (
+                        <span className="text-[10px] bg-green-100 text-green-700 font-bold px-2 py-0.5 rounded-full flex-shrink-0">Active</span>
+                      )}
                     </div>
-                  </div>
-                  {partner?.user_id && (
-                    <MessageButton
-                      userId={partner.user_id}
-                      basePath="/student/messages"
-                      label="Message"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
-                    />
-                  )}
-                </div>
 
-                <div className="border-t border-gray-100" />
-
-                {/* Course + progress */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{LANG_EMOJI[groupDetails.courses?.language ?? ''] ?? '🌍'}</span>
-                      <p className="text-sm font-semibold text-gray-800 truncate">{groupDetails.courses?.name}</p>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold text-gray-500">Week {c.week} of {c.totalWeeks}</span>
+                      <span className="text-xs text-gray-400">{c.done}/{c.total} sessions</span>
                     </div>
-                    <span className="text-xs text-gray-400 flex-shrink-0 ml-2">
-                      Week {currentWeek} of {totalWeeks}
-                    </span>
+                    <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+                      <div
+                        className={`h-2 rounded-full transition-all ${c.isUnpaid ? 'bg-gradient-to-r from-orange-300 to-orange-500' : 'bg-gradient-to-r from-brand-400 to-brand-600'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+
+                    {c.isUnpaid ? (
+                      <Link
+                        href={`/student/courses/${c.courseId}/checkout`}
+                        className="block text-center text-xs font-bold py-2.5 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                      >
+                        Pay to unlock sessions 🔒
+                      </Link>
+                    ) : c.teacherId ? (
+                      <MessageButton
+                        userId={c.teacherId}
+                        basePath="/student/messages"
+                        label="Message teacher"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 bg-brand-50 hover:bg-brand-100 px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+                      />
+                    ) : null}
                   </div>
-                  {/* Progress bar */}
-                  <div className="w-full bg-gray-100 rounded-full h-2 mb-1">
-                    <div
-                      className="bg-gradient-to-r from-brand-400 to-brand-600 h-2 rounded-full transition-all"
-                      style={{ width: `${Math.min((completedCount / Math.max(totalSessions, 1)) * 100, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400">
-                    {completedCount} of {totalSessions} sessions completed
-                  </p>
-                </div>
-              </div>
+                )
+              })}
             </div>
           </section>
 
@@ -495,11 +493,9 @@ export default async function StudentDashboard() {
                   const isNext = i === 0
                   const isActive = s.status === 'active'
                   const canJoin = isActive || (new Date(s.scheduled_at).getTime() - new Date().getTime() < 10 * 60_000)
-                  // Check if the enrollment for this session's course is unpaid
-                  const sessionCourseId = s.groups?.courses ? (s.groups as { courses?: { name?: string; language?: string } & { id?: string } }).courses?.['id'] : undefined
-                  const isUnpaid = unpaidAssignedEnrollments.some(e =>
-                    !sessionCourseId || e.course_id === sessionCourseId || e.status === 'assigned' || e.status === 'active'
-                  ) && hasUnpaidSessions
+                  // Per-course lock: this session is locked only if ITS course is unpaid.
+                  const sessionCourseId = s.groups?.course_id
+                  const isUnpaid = sessionCourseId ? unpaidCourseIds.has(sessionCourseId) : false
                   return (
                     <div key={s.id} className={`rounded-2xl border p-4 flex flex-col gap-3 ${isNext ? 'bg-brand-50 border-brand-200' : 'bg-white border-gray-100 shadow-sm'}`}>
                       <div className="flex items-start justify-between gap-2">
@@ -532,7 +528,7 @@ export default async function StudentDashboard() {
                       </div>
                       {isUnpaid ? (
                         <Link
-                          href={`/student/courses/${unpaidAssignedEnrollments[0]?.course_id}/checkout`}
+                          href={`/student/courses/${sessionCourseId}/checkout`}
                           className="mt-auto text-center text-xs font-bold py-2 rounded-xl bg-orange-500 text-white hover:bg-orange-600 transition-colors"
                         >
                           Pay to unlock 🔒
@@ -579,9 +575,14 @@ export default async function StudentDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {pendingTeachers.map((t, i) => (
                   <div key={t.teacher_id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col items-center text-center hover:border-brand-200 transition-colors">
-                    <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${AVATAR_GRADS[i % AVATAR_GRADS.length]} flex items-center justify-center text-white font-bold text-2xl mb-3`}>
-                      {t.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
-                    </div>
+                    {t.profiles?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.profiles.avatar_url} alt={t.profiles.name} className="w-16 h-16 rounded-full object-cover mb-3" />
+                    ) : (
+                      <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${AVATAR_GRADS[i % AVATAR_GRADS.length]} flex items-center justify-center text-white font-bold text-2xl mb-3`}>
+                        {t.profiles?.name?.charAt(0)?.toUpperCase() ?? '?'}
+                      </div>
+                    )}
                     <p className="font-bold text-gray-900 text-sm">{t.profiles?.name ?? 'Teacher'}</p>
                     {t.profiles && (
                       <p className="text-xs text-gray-400 mt-0.5">
@@ -603,7 +604,7 @@ export default async function StudentDashboard() {
               </div>
             ) : (
               <div className="bg-purple-50 rounded-2xl p-5 text-sm text-purple-700">
-                Teacher profiles are being finalised. All LangMaster teachers are vetted native or certified speakers — you&apos;ll be notified when yours is confirmed.
+                Teacher profiles are being finalised. All Bayyan teachers are vetted native or certified speakers — you&apos;ll be notified when yours is confirmed.
               </div>
             )}
           </section>
@@ -711,12 +712,12 @@ export default async function StudentDashboard() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {enrollments.map(e => {
               const lang = e.courses?.language ?? ''
-              const emoji = LANG_EMOJI[lang] ?? '🌍'
-              const grad  = LANG_GRAD[lang] ?? 'from-purple-400 to-indigo-500'
               return (
                 <Link key={e.id} href={`/student/courses/${e.course_id}`} className="group">
                   <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md hover:border-brand-200 transition-all">
-                    <div className={`h-16 bg-gradient-to-br ${grad} flex items-center justify-center text-3xl`}>{emoji}</div>
+                    <div className="relative h-16 overflow-hidden flex items-center justify-center">
+                      <CourseBannerBg language={lang} thumbnailUrl={e.courses?.thumbnail_url} name={e.courses?.name} emojiClass="text-3xl" />
+                    </div>
                     <div className="p-4">
                       <p className="font-bold text-gray-900 text-sm mb-1 truncate group-hover:text-brand-600 transition-colors">{e.courses?.name}</p>
                       <p className="text-xs text-gray-400 mb-3">{e.courses?.sessions_per_week}× / week · {e.courses?.duration_weeks} weeks</p>

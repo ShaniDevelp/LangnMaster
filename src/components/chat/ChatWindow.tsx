@@ -82,14 +82,27 @@ export function ChatWindow({ conversation, initialMessages, currentUserId, curre
     }
   }, [messages, currentUserId])
 
-  // Mark read on mount
+  // Mark read on mount (and tell the badge which conversation is open)
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('conversation-read', { detail: { conversationId: conversation.id } }))
     markConversationRead(conversation.id).then(() => {
       window.dispatchEvent(new Event('unread-count-refresh'))
     })
     broadcastRead()
+    return () => {
+      window.dispatchEvent(new CustomEvent('conversation-left', { detail: { conversationId: conversation.id } }))
+    }
   }, [conversation.id])
+
+  // Auto-mark read when a message arrives while this conversation is open
+  useEffect(() => {
+    const last = messages[messages.length - 1]
+    if (!last || last.sender_id === currentUserId || last.id.startsWith('opt-')) return
+    markConversationRead(conversation.id).then(() => {
+      window.dispatchEvent(new Event('unread-count-refresh'))
+    })
+    broadcastRead()
+  }, [messages, currentUserId, conversation.id, broadcastRead])
 
   async function loadMore() {
     if (loadingMore || !hasMore || messages.length === 0) return

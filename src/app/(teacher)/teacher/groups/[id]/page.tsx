@@ -162,9 +162,14 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                 return (
                 <div key={m.id} className="px-5 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                      {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                    </div>
+                    {m.profiles?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.profiles.avatar_url} alt={m.profiles.name} className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-gray-900">{m.profiles?.name}</p>

@@ -1,12 +1,15 @@
 'use client'
 import { Suspense, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
+import { GoogleButton, OrDivider } from '@/components/GoogleButton'
+import { RoleToggle, type AuthRole } from '@/components/RoleToggle'
 import { useSearchParams } from 'next/navigation'
 import { signUp } from '@/lib/auth/actions'
 
 function RegisterForm() {
   const params = useSearchParams()
-  const [role, setRole] = useState<'student' | 'teacher'>((params.get('role') as 'student' | 'teacher') || 'student')
+  const [role, setRole] = useState<AuthRole>((params.get('role') as AuthRole) || 'student')
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -24,35 +27,18 @@ function RegisterForm() {
   return (
     <div className="bg-white rounded-3xl shadow-xl shadow-purple-100 border border-gray-100 p-8">
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Create your account</h1>
-      <p className="text-gray-500 text-sm mb-6">Join LangMaster and start your language journey</p>
+      <p className="text-gray-500 text-sm mb-6">Join Bayyan and start your language journey</p>
 
-      {/* Role Toggle */}
-      <div className="flex bg-gray-100 rounded-2xl p-1 mb-6 gap-1">
-        <button
-          type="button"
-          onClick={() => setRole('student')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            role === 'student' ? 'bg-white text-[#6c4ff5] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          🎓 Student
-        </button>
-        <button
-          type="button"
-          onClick={() => setRole('teacher')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-            role === 'teacher' ? 'bg-white text-[#6c4ff5] shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          👨‍🏫 Teacher
-        </button>
-      </div>
+      <RoleToggle role={role} setRole={setRole} disabled={isPending} />
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-xl">
           {error}
         </div>
       )}
+
+      <GoogleButton label={`Sign up with Google as ${role === 'teacher' ? 'Teacher' : 'Student'}`} role={role} />
+      <OrDivider />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
@@ -120,7 +106,7 @@ export default function RegisterPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-purple-50 via-white to-indigo-50">
       <div className="w-full max-w-md">
         <Link href="/" className="flex items-center justify-center mb-8">
-          <span className="text-2xl font-bold text-[#6c4ff5]">LangMaster</span>
+          <BayyanLogo size={34} />
         </Link>
         <Suspense fallback={<div className="bg-white rounded-3xl shadow-xl shadow-purple-100 border border-gray-100 p-8 text-center text-gray-400">Loading…</div>}>
           <RegisterForm />

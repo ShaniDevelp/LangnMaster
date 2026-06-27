@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import Link from 'next/link'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { signOut } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
 
@@ -33,7 +33,7 @@ function GatedShell({
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex flex-col">
       {/* Minimal header */}
       <header className="bg-white/80 backdrop-blur border-b border-gray-100 px-6 h-14 flex items-center justify-between">
-        <span className="text-lg font-bold text-[#6c4ff5]">LangMaster</span>
+        <BayyanLogo size={28} />
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
             {profile.name.charAt(0).toUpperCase()}
@@ -47,11 +47,9 @@ function GatedShell({
         </div>
       </header>
 
-      {/* Content — centered */}
-      <main className="flex-1 flex items-start justify-center px-4 py-10 lg:py-16">
-        <div className="w-full max-w-2xl">
-          {children}
-        </div>
+      {/* Content — page controls its own max-width / centering */}
+      <main className="flex-1 w-full">
+        {children}
       </main>
     </div>
   )
@@ -90,9 +88,12 @@ export default async function TeacherLayout({
 
   if (!profile) redirect('/login')
 
-  // Check application + onboarding state
+  // Check application state via admin (keyed by verified user.id). RLS reads can
+  // come back empty right after a login redirect, which would wrongly gate an
+  // already-submitted teacher back into the application wizard.
+  const admin = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: app } = await (supabase as any)
+  const { data: app } = await (admin as any)
     .from('teacher_applications')
     .select('status')
     .eq('user_id', user.id)
@@ -100,14 +101,24 @@ export default async function TeacherLayout({
 
   const appStatus = (app as { status: string } | null)?.status ?? 'none'
   const isApproved = appStatus === 'approved'
-  const onboardingCompleted =
-    (profile as Profile & { onboarding_completed?: boolean }).onboarding_completed ?? false
 
-  const isGated = !isApproved || !onboardingCompleted
+  // Approval is the only gate. Onboarding now lives inside the application —
+  // no separate post-approval wizard.
+  const isGated = !isApproved
 
-  // Gated state: render the minimal shell (middleware already ensures
-  // the user is on the correct gated page)
+  // The application wizard renders its own full-screen self-contained design
+  // with an in-page top bar — same as the student onboarding. It must NOT get
+  // the GatedShell header (would double up the top bar on desktop). Only the
+  // pending/rejected status page needs GatedShell for a header + container.
+  //   appStatus 'none'      → /teacher/application  (full-bleed)
+  //   pending / rejected    → /teacher/pending      (GatedShell)
+  const isWizard = appStatus === 'none'
+
   if (isGated) {
+    if (isWizard) {
+      // Page owns the full screen — no topbar until onboarding completes.
+      return <>{children}</>
+    }
     return (
       <GatedShell profile={profile}>
         {children}

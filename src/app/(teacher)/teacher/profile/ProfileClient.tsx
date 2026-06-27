@@ -3,16 +3,17 @@ import { useState, useTransition } from 'react'
 import { saveTeacherProfile } from '@/lib/teacher/profile-actions'
 import { saveNotificationPrefs, saveAvailability } from '@/lib/teacher/phase4-actions'
 import { AvailabilityPicker } from '@/components/AvailabilityPicker'
+import { AvatarUpload } from '@/components/AvatarUpload'
 
 type ProfileData = {
   name: string
+  avatar_url: string | null
   bio: string | null
   timezone: string | null
   intro_video_url: string | null
   years_experience: number
   certifications: string[]
   languages_taught: { lang: string; proficiency: string }[]
-  rate_per_session: number
   rating: number
   review_count: number
   availability: string[]
@@ -95,7 +96,6 @@ export function ProfileClient({ profile, userId }: Props) {
   const [yearsExp, setYearsExp]           = useState(profile.years_experience)
   const [certs, setCerts]                 = useState<string[]>(profile.certifications)
   const [languages, setLanguages]         = useState(profile.languages_taught)
-  const [rate, setRate]                   = useState(profile.rate_per_session)
   const [customCert, setCustomCert]       = useState('')
 
   // Availability state
@@ -130,7 +130,7 @@ export function ProfileClient({ profile, userId }: Props) {
 
   function handleSaveProfile() {
     startSaveProfile(async () => {
-      const res = await saveTeacherProfile({ name, bio, timezone, introVideoUrl, yearsExp, certs, languages, rate })
+      const res = await saveTeacherProfile({ name, bio, timezone, introVideoUrl, yearsExp, certs, languages })
       setProfileMsg(res.error ? `Error: ${res.error}` : 'Profile saved ✓')
       setTimeout(() => setProfileMsg(null), 3000)
     })
@@ -202,6 +202,14 @@ export function ProfileClient({ profile, userId }: Props) {
             <div className="space-y-5">
               <SectionCard icon="📋" title="Basic info" desc="Displayed on your public teacher profile">
                 <div className="space-y-4">
+                  <div className="pb-4 border-b border-gray-50">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Profile picture</label>
+                    <AvatarUpload
+                      name={name}
+                      initialUrl={profile.avatar_url}
+                      fallbackGradient="from-[#6c4ff5] to-indigo-500"
+                    />
+                  </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Display name</label>
                     <input type="text" value={name} onChange={e => setName(e.target.value)}
@@ -214,20 +222,10 @@ export function ProfileClient({ profile, userId }: Props) {
                       className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 resize-none transition" />
                     <p className="text-xs text-gray-400 mt-1 text-right">{bio.length}/500</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Years experience</label>
-                      <input type="number" value={yearsExp} onChange={e => setYearsExp(parseInt(e.target.value) || 0)} min={0} max={50}
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1.5">Rate / session (USD)</label>
-                      <div className="relative">
-                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-                        <input type="number" value={rate} onChange={e => setRate(parseFloat(e.target.value) || 0)} min={0} step={5}
-                          className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition" />
-                      </div>
-                    </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Years experience</label>
+                    <input type="number" value={yearsExp} onChange={e => setYearsExp(parseInt(e.target.value) || 0)} min={0} max={50}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 transition" />
                   </div>
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">Intro video URL <span className="font-normal text-gray-400">(YouTube/Loom)</span></label>

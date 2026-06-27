@@ -1,6 +1,7 @@
 'use client'
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { savePostCall } from '@/lib/teacher/session-actions'
 
 type Student = { id: string; name: string }
@@ -101,7 +102,7 @@ export function PostCallForm(props: Props) {
             >
               ←
             </Link>
-            <span className="font-bold text-[#6c4ff5]">LangMaster</span>
+            <BayyanLogo size={24} />
             <span className="hidden sm:inline text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Session Recap</span>
           </div>
           <Link
@@ -178,11 +179,6 @@ export function PostCallForm(props: Props) {
               </div>
             </div>
 
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 font-semibold text-sm rounded-xl p-4">
-                ⚠️ {error}
-              </div>
-            )}
           </div>
 
           {/* Right column */}
@@ -269,6 +265,13 @@ export function PostCallForm(props: Props) {
                 </>
               )}
             </div>
+
+            {/* Warning — shown right below the save card */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 font-semibold text-sm rounded-xl p-4">
+                ⚠️ {error}
+              </div>
+            )}
 
           </div>
         </div>

@@ -1,5 +1,5 @@
 -- =============================================================================
--- LangMaster Seed Data
+-- Bayyan Seed Data
 -- Run AFTER schema.sql AND stage3-migration.sql in the Supabase SQL editor.
 -- Idempotent: uses ON CONFLICT DO NOTHING everywhere.
 -- =============================================================================

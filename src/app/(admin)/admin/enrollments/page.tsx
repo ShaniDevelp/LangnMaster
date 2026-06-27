@@ -4,6 +4,7 @@ import { GroupBuilder } from './GroupBuilder'
 import { SuggestionsReview } from './SuggestionsReview'
 import { PendingTeacherGroups, type PendingTeacherGroupRow } from './PendingTeacherGroups'
 import { DeclinedAlerts, type DeclinedAlertRow } from './DeclinedAlerts'
+import { MarkPaidButton } from './MarkPaidButton'
 import { suggestGroupAssignments } from '@/lib/admin/actions'
 
 type EnrollmentRow = Enrollment & {
@@ -298,6 +299,7 @@ export default async function AdminEnrollmentsPage() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Student</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Course</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Payment</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Enrolled</th>
               </tr>
             </thead>
@@ -318,6 +320,9 @@ export default async function AdminEnrollmentsPage() {
                       {e.status}
                     </span>
                   </td>
+                  <td className="px-6 py-3">
+                    <MarkPaidButton enrollmentId={e.id} paymentStatus={e.payment_status} />
+                  </td>
                   <td className="px-6 py-3 text-gray-400 text-xs">
                     {new Date(e.enrolled_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </td>
@@ -325,7 +330,7 @@ export default async function AdminEnrollmentsPage() {
               ))}
               {enrollments.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-gray-400">No enrollments yet</td>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400">No enrollments yet</td>
                 </tr>
               )}
             </tbody>

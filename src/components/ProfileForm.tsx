@@ -3,6 +3,7 @@ import { useState, useTransition } from 'react'
 import { updateProfile } from '@/lib/student/actions'
 import type { Profile, Enrollment, Course } from '@/lib/supabase/types'
 import { AvailabilityPicker } from '@/components/AvailabilityPicker'
+import { AvatarUpload } from '@/components/AvatarUpload'
 
 type EnrollmentRow = Enrollment & { courses: Pick<Course, 'name' | 'language'> | null }
 
@@ -102,8 +103,6 @@ export default function ProfileForm({ profile, enrollments }: Props) {
     })
   }
 
-  const initial = profile.name?.charAt(0)?.toUpperCase() ?? '?'
-
   return (
     <div className="max-w-3xl space-y-6 lg:space-y-8">
       <div>
@@ -113,11 +112,9 @@ export default function ProfileForm({ profile, enrollments }: Props) {
 
       {/* Avatar + personal info */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-6 space-y-4">
-        <div className="flex items-center gap-4 pb-4 border-b border-gray-100">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-brand-400 to-indigo-500 flex items-center justify-center text-white font-bold text-xl sm:text-2xl flex-shrink-0">
-            {initial}
-          </div>
-          <div className="min-w-0">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 pb-4 border-b border-gray-100">
+          <AvatarUpload name={profile.name} initialUrl={profile.avatar_url ?? null} />
+          <div className="min-w-0 sm:ml-auto sm:text-right">
             <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wider font-bold">Logged in as</p>
             <p className="font-bold text-gray-900 truncate">{profile.name}</p>
             <p className="text-xs text-gray-400 capitalize">{profile.role}</p>

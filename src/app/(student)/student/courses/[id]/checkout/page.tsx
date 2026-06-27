@@ -2,15 +2,9 @@
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useTransition } from 'react'
 import Link from 'next/link'
-import { enrollWithoutPayment, createCheckoutSession } from '@/lib/student/actions'
-
-const LANG_CONFIG: Record<string, { emoji: string; gradient: string }> = {
-  English:  { emoji: '🇬🇧', gradient: 'from-blue-500 to-indigo-600' },
-  Spanish:  { emoji: '🇪🇸', gradient: 'from-red-500 to-orange-500' },
-  French:   { emoji: '🇫🇷', gradient: 'from-blue-600 to-blue-800' },
-  German:   { emoji: '🇩🇪', gradient: 'from-yellow-500 to-amber-600' },
-  Mandarin: { emoji: '🇨🇳', gradient: 'from-red-600 to-red-800' },
-}
+import { enrollWithoutPayment } from '@/lib/student/actions'
+import { MANUAL_PAYMENT, whatsappLink } from '@/lib/payments/manual'
+import { CourseBannerBg } from '@/components/CourseBanner'
 
 type Course = {
   id: string
@@ -20,8 +14,9 @@ type Course = {
   duration_weeks: number
   sessions_per_week: number
   max_group_size: number
-  price_usd: number
+  price_pkr: number
   description: string
+  thumbnail_url: string | null
 }
 
 type Enrollment = { status: string; payment_status: string } | null
@@ -42,7 +37,6 @@ export default function CheckoutPage() {
   const [enrollment, setEnrollment] = useState<Enrollment>(null)
   const [loading, setLoading] = useState(true)
   const [isPendingEnroll, startEnrollTransition] = useTransition()
-  const [isPendingPay, startPayTransition] = useTransition()
   const [enrollError, setEnrollError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -68,12 +62,6 @@ export default function CheckoutPage() {
     })
   }
 
-  function handlePayNow() {
-    startPayTransition(async () => {
-      await createCheckoutSession(id)
-    })
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -84,7 +72,6 @@ export default function CheckoutPage() {
 
   if (!course) return null
 
-  const cfg = LANG_CONFIG[course.language] ?? { emoji: '🌍', gradient: 'from-gray-400 to-gray-600' }
   const cohortDate = nextCohortDate()
   const alreadyPaid = enrollment?.payment_status === 'paid'
   const enrolledUnpaidAssigned = enrollment?.payment_status === 'unpaid' && enrollment?.status === 'assigned'
@@ -115,26 +102,15 @@ export default function CheckoutPage() {
             ← Back to course
           </Link>
         </div>
-        <div className="bg-amber-50 border border-amber-300 rounded-3xl p-8 text-center">
-          <div className="text-4xl mb-3">🎉</div>
-          <h2 className="text-xl font-bold text-amber-900 mb-2">Your group has been assigned!</h2>
-          <p className="text-amber-800 text-sm mb-1">Pay now to unlock your live sessions and get started.</p>
-          <p className="text-3xl font-extrabold text-gray-900 my-4">${course.price_usd} <span className="text-base font-normal text-gray-500">USD</span></p>
-          <button
-            type="button"
-            onClick={handlePayNow}
-            disabled={isPendingPay}
-            className="w-full bg-brand-500 text-white font-bold py-4 rounded-2xl text-base hover:bg-brand-600 transition-colors shadow-lg shadow-purple-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isPendingPay ? (
-              <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Redirecting…</>
-            ) : (
-              <>🔒 Pay ${course.price_usd} to unlock sessions</>
-            )}
-          </button>
-          <div className="mt-4 text-xs text-amber-700 space-y-1">
-            <div>🔒 Secure payment via Stripe · 7-day refund guarantee</div>
+        <div className="bg-amber-50 border border-amber-300 rounded-3xl p-6 sm:p-8">
+          <div className="text-center">
+            <div className="text-4xl mb-3">🎉</div>
+            <h2 className="text-xl font-bold text-amber-900 mb-2">Your group has been assigned!</h2>
+            <p className="text-amber-800 text-sm mb-1">Pay via Easypaisa or JazzCash to unlock your live sessions.</p>
+            <p className="text-3xl font-extrabold text-gray-900 my-4">Rs {Number(course.price_pkr).toLocaleString()} <span className="text-base font-normal text-gray-500">PKR</span></p>
           </div>
+
+          <ManualPaymentInstructions courseName={course.name} amount={course.price_pkr} />
         </div>
       </div>
     )
@@ -178,8 +154,8 @@ export default function CheckoutPage() {
         {/* ── Left: course summary ── */}
         <div className="space-y-4">
           <div className="bg-white border border-gray-100 shadow-sm rounded-3xl overflow-hidden">
-            <div className={`h-24 bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-5xl`}>
-              {cfg.emoji}
+            <div className="relative h-24 overflow-hidden flex items-center justify-center">
+              <CourseBannerBg language={course.language} thumbnailUrl={course.thumbnail_url} name={course.name} emojiClass="text-5xl" />
             </div>
             <div className="p-6">
               <div className="flex items-start justify-between gap-2 mb-1">
@@ -244,7 +220,7 @@ export default function CheckoutPage() {
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>{course.name}</span>
-                <span>${course.price_usd}</span>
+                <span>Rs {Number(course.price_pkr).toLocaleString()}</span>
               </div>
               <div className="flex justify-between text-gray-400">
                 <span>{course.sessions_per_week * course.duration_weeks} sessions × 60 min</span>
@@ -252,7 +228,7 @@ export default function CheckoutPage() {
               </div>
               <div className="border-t border-gray-100 pt-3 flex justify-between font-bold text-gray-900">
                 <span>Total</span>
-                <span>${course.price_usd} USD</span>
+                <span>Rs {Number(course.price_pkr).toLocaleString()} PKR</span>
               </div>
             </div>
 
@@ -286,11 +262,77 @@ export default function CheckoutPage() {
             <div className="space-y-2 text-xs text-gray-400">
               <div className="flex items-center gap-2"><span>💳</span> Payment due only after group assignment</div>
               <div className="flex items-center gap-2"><span>↩️</span> 7-day full refund if you change your mind</div>
-              <div className="flex items-center gap-2"><span>🔒</span> Payment via Stripe — secure checkout</div>
+              <div className="flex items-center gap-2"><span>🔒</span> Pay via Easypaisa / JazzCash after assignment</div>
             </div>
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Manual payment (Easypaisa / JazzCash) ─────────────────────────────────────
+// Temporary flow until a real gateway is integrated: student pays manually and
+// sends a screenshot on WhatsApp; an admin verifies it from the admin panel.
+function ManualPaymentInstructions({ courseName, amount }: { courseName: string; amount: number }) {
+  const [copied, setCopied] = useState<string | null>(null)
+
+  function copy(label: string, value: string) {
+    navigator.clipboard?.writeText(value)
+    setCopied(label)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  const waMessage =
+    `Hi! I've paid for "${courseName}" (Rs ${Number(amount).toLocaleString()}). My payment screenshot is attached. Please verify my enrollment.`
+
+  const accounts = [
+    { key: 'easypaisa', label: 'Easypaisa', emoji: '📗', ...MANUAL_PAYMENT.easypaisa },
+    { key: 'jazzcash', label: 'JazzCash', emoji: '📕', ...MANUAL_PAYMENT.jazzcash },
+  ]
+
+  return (
+    <div className="mt-2 space-y-4 text-left">
+      <div className="rounded-2xl bg-white border border-amber-200 p-4 space-y-3">
+        <p className="text-sm font-bold text-gray-900">1. Send the payment to one of these accounts</p>
+        {accounts.map(a => (
+          <div key={a.key} className="flex items-center justify-between gap-3 bg-gray-50 rounded-xl px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-xs text-gray-400">{a.emoji} {a.label} · {a.accountName}</p>
+              <p className="text-sm font-semibold text-gray-900 truncate">{a.accountNumber}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => copy(a.key, a.accountNumber)}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors flex-shrink-0"
+            >
+              {copied === a.key ? 'Copied ✓' : 'Copy'}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl bg-white border border-amber-200 p-4 space-y-3">
+        <p className="text-sm font-bold text-gray-900">2. Send the payment screenshot on WhatsApp</p>
+        <p className="text-xs text-gray-500">
+          Take a screenshot of your successful transfer and send it to us. We verify and unlock your sessions, usually within a few hours.
+        </p>
+        <a
+          href={whatsappLink(waMessage)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full inline-flex items-center justify-center gap-2 bg-green-500 text-white font-bold py-3.5 rounded-2xl text-base hover:bg-green-600 transition-colors"
+        >
+          <span>💬</span> Send screenshot on WhatsApp
+        </a>
+        <p className="text-center text-xs text-gray-400">
+          Or message us at {MANUAL_PAYMENT.whatsappNumber}
+        </p>
+      </div>
+
+      <p className="text-center text-xs text-amber-700">
+        Your sessions unlock once an admin confirms your payment · 7-day refund guarantee
+      </p>
     </div>
   )
 }

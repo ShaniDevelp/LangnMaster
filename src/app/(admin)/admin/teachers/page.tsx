@@ -4,6 +4,7 @@ import { TeachersClient } from './TeachersClient'
 type ApplicationRow = {
   status: string
   submitted_at: string
+  reviewed_at: string | null
   admin_notes: string | null
   languages_taught: { lang: string; proficiency: string }[]
   certifications: string[]
@@ -11,12 +12,15 @@ type ApplicationRow = {
   intro_video_url: string | null
   timezone: string | null
   availability: string[]
+  rate_expectation: number | null
 }
 
 type TeacherWithApplication = {
   id: string
   name: string
   bio: string | null
+  avatar_url: string | null
+  years_experience: number | null
   created_at: string
   groups: { id: string; status: string; courses: { name: string } | null }[]
   teacher_applications: ApplicationRow | null
@@ -30,9 +34,9 @@ export default async function AdminTeachersPage() {
   const { data: teachersRaw } = await (admin as any)
     .from('profiles')
     .select(`
-      id, name, bio, created_at,
+      id, name, bio, avatar_url, years_experience, created_at,
       groups:groups(id, status, courses(name)),
-      teacher_applications(status, submitted_at, admin_notes, languages_taught, certifications, teaching_bio, intro_video_url, timezone, availability)
+      teacher_applications(status, submitted_at, reviewed_at, admin_notes, languages_taught, certifications, teaching_bio, intro_video_url, timezone, availability, rate_expectation)
     `)
     .eq('role', 'teacher')
     .order('created_at', { ascending: false })

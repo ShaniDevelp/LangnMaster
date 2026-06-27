@@ -66,7 +66,7 @@ export default async function TeacherGroupsPage() {
     } : null,
     group_members: g.group_members.map(m => ({
       id: m.id,
-      profiles: m.profiles ? { id: m.profiles.id, name: m.profiles.name } : null,
+      profiles: m.profiles ? { id: m.profiles.id, name: m.profiles.name, avatar_url: m.profiles.avatar_url } : null,
     })),
     next_session: nextByGroup[g.id] ? {
       id: nextByGroup[g.id].id,

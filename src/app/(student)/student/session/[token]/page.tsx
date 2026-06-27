@@ -6,12 +6,12 @@ import type { Session, Group, Course, Profile } from '@/lib/supabase/types'
 type FullSession = Session & {
   groups: (Group & {
     courses: Pick<Course, 'id' | 'name' | 'language' | 'sessions_per_week' | 'duration_weeks'> | null
-    profiles: Pick<Profile, 'id' | 'name'> | null
+    profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null
   }) | null
 }
 
 type ModuleRow = { week_number: number; title: string }
-type MemberRow = { user_id: string; profiles: Pick<Profile, 'name'> | null }
+type MemberRow = { user_id: string; profiles: Pick<Profile, 'name' | 'avatar_url'> | null }
 type NextRow = Pick<Session, 'scheduled_at' | 'room_token'>
 
 export default async function StudentSessionPage({ params }: { params: Promise<{ token: string }> }) {
@@ -22,7 +22,7 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
 
   const { data: sessionRaw } = await supabase
     .from('sessions')
-    .select('*, groups(*, courses(id, name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name))')
+    .select('*, groups(*, courses(id, name, language, sessions_per_week, duration_weeks), profiles:teacher_id(id, name, avatar_url))')
     .eq('room_token', token)
     .single()
 
@@ -39,8 +39,9 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
 
   if (!membershipRaw) redirect('/student/sessions')
 
-  const { data: profileRaw } = await supabase.from('profiles').select('name').eq('id', user.id).single()
+  const { data: profileRaw } = await supabase.from('profiles').select('name, avatar_url').eq('id', user.id).single()
   const myName = (profileRaw as { name?: string } | null)?.name ?? 'Student'
+  const myAvatar = (profileRaw as { avatar_url?: string | null } | null)?.avatar_url ?? null
 
   const group = session.groups
   const course = group?.courses ?? null
@@ -59,7 +60,7 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
   const [partnersRes, moduleRes, nextRes, sessionIndexRes] = await Promise.all([
     supabase
       .from('group_members')
-      .select('user_id, profiles(name)')
+      .select('user_id, profiles(name, avatar_url)')
       .eq('group_id', groupId)
       .neq('user_id', user.id),
     courseId
@@ -90,6 +91,7 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
   // Partner is the non-teacher member
   const partnerMember = members.find(m => m.user_id !== teacher?.id)
   const partnerName = partnerMember?.profiles?.name ?? null
+  const partnerAvatar = partnerMember?.profiles?.avatar_url ?? null
 
   const weekModule = moduleRes.data as ModuleRow | null
   const nextSession = nextRes.data as NextRow | null
@@ -102,11 +104,14 @@ export default async function StudentSessionPage({ params }: { params: Promise<{
       sessionId={session.id}
       userId={user.id}
       userName={myName}
+      userAvatarUrl={myAvatar}
       courseName={course?.name ?? 'Session'}
       courseId={courseId}
       teacherId={group?.teacher_id ?? null}
       teacherName={teacher?.name ?? null}
+      teacherAvatarUrl={teacher?.avatar_url ?? null}
       partnerName={partnerName}
+      partnerAvatarUrl={partnerAvatar}
       scheduledAt={session.scheduled_at}
       durationMinutes={session.duration_minutes}
       prepNotes={session.notes}

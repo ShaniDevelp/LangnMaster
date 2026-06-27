@@ -1,6 +1,7 @@
 'use client'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { SidebarNav } from '@/components/SidebarNav'
 import { UnreadMessagesBadge } from '@/components/chat/UnreadMessagesBadge'
 import type { Profile } from '@/lib/supabase/types'
@@ -35,7 +36,7 @@ export function StudentLayoutClient({
         {/* Mobile header */}
         <header className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-100">
           <div className="px-4 h-14 flex items-center justify-between">
-            <span className="font-bold text-brand-500">LangMaster</span>
+            <BayyanLogo size={26} />
             <div className="flex items-center gap-3">
               <Link href="/student/messages" className="relative">
                 <span className="text-lg">💬</span>
@@ -43,9 +44,14 @@ export function StudentLayoutClient({
                   <UnreadMessagesBadge userId={profile.id} dot />
                 </span>
               </Link>
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
+              {profile.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatar_url} alt={profile.name} className="w-7 h-7 rounded-full object-cover" />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-brand-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
           </div>
         </header>

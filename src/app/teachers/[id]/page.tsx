@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { notFound } from 'next/navigation'
 import type { Profile, Review, Course } from '@/lib/supabase/types'
 
@@ -76,7 +77,7 @@ export default async function PublicTeacherProfilePage({ params }: { params: Pro
       {/* Top nav */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-[#6c4ff5]">LangMaster</Link>
+          <Link href="/"><BayyanLogo size={28} /></Link>
           <Link href="/student/courses" className="text-sm text-gray-500 hover:text-[#6c4ff5] transition-colors">
             Browse courses →
           </Link>
@@ -90,9 +91,14 @@ export default async function PublicTeacherProfilePage({ params }: { params: Pro
           <aside className="lg:sticky lg:top-24 self-start space-y-5">
             {/* Avatar + name */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4 shadow-lg shadow-purple-200">
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
+              {profile.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatar_url} alt={profile.name} className="w-24 h-24 rounded-full object-cover mx-auto mb-4 shadow-lg shadow-purple-200" />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-3xl font-bold text-white mx-auto mb-4 shadow-lg shadow-purple-200">
+                  {profile.name.charAt(0).toUpperCase()}
+                </div>
+              )}
               <h1 className="text-xl font-bold text-gray-900">{profile.name}</h1>
               <p className="text-sm text-gray-400 mt-1">Teacher since {joinYear}</p>
               {(tp.rating ?? 0) > 0 && (
@@ -218,9 +224,14 @@ export default async function PublicTeacherProfilePage({ params }: { params: Pro
                   {reviews.map(r => (
                     <div key={r.id} className="border-b border-gray-50 last:border-0 pb-4 last:pb-0">
                       <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                          {r.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                        </div>
+                        {r.profiles?.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={r.profiles.avatar_url} alt={r.profiles.name ?? 'Student'} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            {r.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
+                          </div>
+                        )}
                         <div className="flex-1">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <p className="text-sm font-semibold text-gray-900">{r.profiles?.name ?? 'Student'}</p>

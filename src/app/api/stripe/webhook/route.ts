@@ -1,3 +1,12 @@
+// Stripe webhook DISABLED — payments handled manually (Easypaisa/JazzCash),
+// verified by an admin via setEnrollmentPaymentStatus. Re-enable when a real
+// gateway is integrated. Original implementation kept below, commented out.
+
+export async function POST() {
+  return new Response('Stripe webhook disabled', { status: 410 })
+}
+
+/*
 import { headers } from 'next/headers'
 import { stripe } from '@/lib/stripe'
 import { fulfillCheckoutSession } from '@/lib/student/actions'
@@ -33,3 +42,4 @@ export async function POST(request: Request) {
 
   return new Response('ok', { status: 200 })
 }
+*/

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { signInAdmin } from '@/lib/auth/actions'
 
 export default function AdminLoginPage() {
@@ -22,7 +23,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-gray-900 via-purple-950 to-gray-900">
       <div className="w-full max-w-md">
         <div className="flex items-center justify-center mb-8 gap-3">
-          <span className="text-2xl font-bold text-white">LangMaster</span>
+          <BayyanLogo size={34} tone="light" />
           <span className="text-xs font-semibold bg-purple-500/30 text-purple-300 px-2.5 py-1 rounded-full border border-purple-500/40">
             Admin
           </span>
@@ -30,7 +31,7 @@ export default function AdminLoginPage() {
 
         <div className="bg-white/5 backdrop-blur-sm rounded-3xl border border-white/10 p-8">
           <h1 className="text-2xl font-bold text-white mb-1">Admin sign in</h1>
-          <p className="text-gray-400 text-sm mb-8">Access the LangMaster admin panel</p>
+          <p className="text-gray-400 text-sm mb-8">Access the Bayyan admin panel</p>
 
           {error && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl">

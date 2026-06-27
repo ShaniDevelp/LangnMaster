@@ -1,6 +1,7 @@
 'use client'
 import { useState, useTransition, useEffect } from 'react'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { saveOnboarding } from '@/lib/student/actions'
 import { AvailabilityPicker } from '@/components/AvailabilityPicker'
 
@@ -137,7 +138,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-indigo-50 flex flex-col">
       {/* Top bar */}
       <div className="flex items-center justify-between px-4 sm:px-6 py-4 max-w-2xl mx-auto w-full">
-        <Link href="/" className="text-lg font-bold text-brand-500">LangMaster</Link>
+        <Link href="/"><BayyanLogo size={28} /></Link>
         <span className="text-sm text-gray-400">Step {step + 1} of 4</span>
       </div>
 

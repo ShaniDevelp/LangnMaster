@@ -9,7 +9,7 @@ type SessionWithGroup = Session & {
   groups: (Group & {
     week_start?: string | null
     courses: Pick<Course, 'name' | 'language' | 'level' | 'sessions_per_week' | 'duration_weeks'> | null
-    group_members: (GroupMember & { profiles: Pick<Profile, 'id' | 'name'> | null })[]
+    group_members: (GroupMember & { profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null })[]
   }) | null
 }
 
@@ -22,7 +22,7 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: sessionRaw } = await (supabase as any)
     .from('sessions')
-    .select('*, groups(*, week_start, courses(name, language, level, sessions_per_week, duration_weeks), profiles:teacher_id(id, name), group_members(*, profiles:user_id(id, name)))')
+    .select('*, groups(*, week_start, courses(name, language, level, sessions_per_week, duration_weeks), profiles:teacher_id(id, name), group_members(*, profiles:user_id(id, name, avatar_url)))')
     .eq('room_token', token)
     .single()
 
@@ -36,7 +36,7 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
   const profile = profileRaw as Profile | null
 
   const students = (session.groups?.group_members ?? [])
-    .map(m => ({ id: m.profiles?.id ?? '', name: m.profiles?.name ?? 'Student' }))
+    .map(m => ({ id: m.profiles?.id ?? '', name: m.profiles?.name ?? 'Student', avatarUrl: m.profiles?.avatar_url ?? null }))
     .filter(s => s.id)
 
   const weekStart = session.groups?.week_start ?? null
@@ -64,6 +64,7 @@ export default async function TeacherSessionPage({ params }: { params: Promise<{
       scheduledAt={session.scheduled_at}
       userId={user.id}
       userName={profile?.name ?? 'Teacher'}
+      userAvatarUrl={profile?.avatar_url ?? null}
       students={students}
       weekNumber={currentWeek}
       sessionNumber={sessionNumber}

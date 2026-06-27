@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { PendingPageClient } from './PendingPageClient'
 
@@ -15,19 +15,23 @@ export default async function TeacherPendingPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // Admin read (keyed by verified user.id) — avoids the RLS read returning
+  // empty right after a login redirect, which would falsely read 'none' and
+  // bounce the teacher back to the application form.
+  const admin = createAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: appRaw } = await (supabase as any)
+  const { data: appRaw } = await (admin as any)
     .from('teacher_applications')
     .select('status, submitted_at, admin_notes, languages_taught, certifications')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
   const app = appRaw as ApplicationRow | null
 
   const status = !app ? 'none' : app.status
 
   // Immediately redirect if already approved or no application
   if (status === 'approved') {
-    redirect(`/api/auth/set-teacher-state?next=/teacher/onboarding`)
+    redirect(`/api/auth/set-teacher-state?next=/teacher/dashboard`)
   }
   if (status === 'none') {
     redirect('/teacher/application')

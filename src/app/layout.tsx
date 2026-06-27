@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
-  title: 'LangMaster – Live Language Learning',
+  title: 'Bayyan – Live Language Learning',
   description: 'Learn languages in live small-group sessions with expert teachers.',
   manifest: '/manifest.json',
 }

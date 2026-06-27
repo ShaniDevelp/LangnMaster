@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { signOut } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
 import { UnreadMessagesBadge } from '@/components/chat/UnreadMessagesBadge'
@@ -71,7 +72,7 @@ export function TeacherLayoutClient({
       {/* ── Desktop sidebar ────────────────────────────────────── */}
       <aside className="hidden lg:flex flex-col w-60 bg-white border-r border-gray-100 fixed inset-y-0 z-40">
         <div className="px-6 py-5 border-b border-gray-100">
-          <span className="text-lg font-bold text-[#6c4ff5]">LangMaster</span>
+          <BayyanLogo size={28} />
           <span className="ml-2 text-xs font-semibold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Teacher</span>
         </div>
 
@@ -126,9 +127,7 @@ export function TeacherLayoutClient({
 
         <div className="px-4 py-4 border-t border-gray-100">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-              {profile.name.charAt(0).toUpperCase()}
-            </div>
+            <TeacherAvatar name={profile.name} url={profile.avatar_url ?? null} sizeClass="w-8 h-8" textClass="text-sm" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 truncate">{profile.name}</p>
               <p className="text-xs text-gray-400">Teacher</p>
@@ -148,7 +147,7 @@ export function TeacherLayoutClient({
         {/* Mobile header */}
         <header className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-gray-100">
           <div className="px-4 h-14 flex items-center justify-between">
-            <span className="font-bold text-[#6c4ff5]">LangMaster</span>
+            <BayyanLogo size={26} />
             <div className="flex items-center gap-3">
               <Link href="/teacher/notifications" className="relative">
                 <span className="text-lg">🔔</span>
@@ -158,9 +157,7 @@ export function TeacherLayoutClient({
                   </span>
                 )}
               </Link>
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                {profile.name.charAt(0).toUpperCase()}
-              </div>
+              <TeacherAvatar name={profile.name} url={profile.avatar_url ?? null} sizeClass="w-7 h-7" textClass="text-xs" />
             </div>
           </div>
         </header>
@@ -221,9 +218,7 @@ export function TeacherLayoutClient({
             <div className="lg:hidden fixed bottom-0 inset-x-0 z-50 bg-white rounded-t-2xl shadow-2xl pb-safe">
               <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-white text-sm font-bold">
-                    {profile.name.charAt(0).toUpperCase()}
-                  </div>
+                  <TeacherAvatar name={profile.name} url={profile.avatar_url ?? null} sizeClass="w-9 h-9" textClass="text-sm" />
                   <div>
                     <p className="text-sm font-semibold text-gray-900">{profile.name}</p>
                     <p className="text-xs text-gray-400">Teacher</p>
@@ -276,6 +271,20 @@ export function TeacherLayoutClient({
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+function TeacherAvatar({
+  name, url, sizeClass, textClass,
+}: { name: string; url: string | null; sizeClass: string; textClass: string }) {
+  if (url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt={name} className={`${sizeClass} rounded-full object-cover flex-shrink-0`} />
+  }
+  return (
+    <div className={`${sizeClass} rounded-full bg-gradient-to-br from-[#6c4ff5] to-indigo-500 flex items-center justify-center text-white ${textClass} font-bold flex-shrink-0`}>
+      {name.charAt(0).toUpperCase()}
     </div>
   )
 }

@@ -49,3 +49,53 @@ body {
 
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ── Landing animations ───────────────────────────────────────────── */
+
+/* Floating gradient blobs (hero / CTA backdrops) */
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(24px, -34px) scale(1.12); }
+  66%      { transform: translate(-18px, 22px) scale(0.94); }
+}
+.animate-blob { animation: blob 16s ease-in-out infinite; }
+.blob-delay-2 { animation-delay: -4s; }
+.blob-delay-4 { animation-delay: -8s; }
+
+/* Animated gradient text / fills */
+@keyframes gradient-pan {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.animate-gradient { background-size: 200% 200%; animation: gradient-pan 7s ease infinite; }
+
+/* Seamless marquee (duplicate the track for a clean loop) */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee { animation: marquee 36s linear infinite; }
+.marquee-fast { animation-duration: 26s; }
+
+/* Soft float for hero cards / chips */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.animate-floaty { animation: floaty 5s ease-in-out infinite; }
+
+/* Scroll-reveal — toggled by the <Reveal> client component */
+.reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.reveal-in { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-blob, .animate-marquee, .animate-gradient, .animate-floaty,
+  .animate-pulse { animation: none !important; }
+  .reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+}

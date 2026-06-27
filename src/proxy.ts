@@ -34,7 +34,10 @@ export async function proxy(request: NextRequest) {
   const isAuthenticated = session !== null
   const { pathname } = request.nextUrl
 
-  const publicPaths = ['/', '/login', '/register', '/admin/login']
+  const publicPaths = [
+    '/', '/login', '/register', '/admin/login',
+    '/verify', '/forgot-password', '/reset-password',
+  ]
   const isPublic = publicPaths.includes(pathname) || 
                    pathname.startsWith('/api') || 
                    pathname.startsWith('/teachers')
@@ -84,13 +87,12 @@ export async function proxy(request: NextRequest) {
 
     const isAppSubmitted = request.cookies.get('x-teacher-app-submitted')?.value === 'true'
     const isApproved = request.cookies.get('x-teacher-approved')?.value === 'true'
-    const isOnboarded = request.cookies.get('x-teacher-onboarded')?.value === 'true'
 
     // If NO cookies are set, fetch state from DB once.
     // Exclude /teacher/application itself — a new teacher with no cookies is always
     // in the right place there, and the gating logic below handles it correctly.
     if (
-      !isAppSubmitted && !isApproved && !isOnboarded &&
+      !isAppSubmitted && !isApproved &&
       !pathname.startsWith('/api/auth/set-teacher-state') &&
       pathname !== '/teacher/application'
     ) {
@@ -114,14 +116,8 @@ export async function proxy(request: NextRequest) {
       return supabaseResponse
     }
 
-    if (!isOnboarded) {
-      if (pathname !== '/teacher/onboarding') {
-        return NextResponse.redirect(new URL('/teacher/onboarding', request.url))
-      }
-      return supabaseResponse
-    }
-
-    // Fully onboarded: prevent going back to gated routes
+    // Approved = fully unlocked. Onboarding now lives inside the application —
+    // no separate post-approval wizard. Prevent going back to gated routes.
     const gatedRoutes = ['/teacher/application', '/teacher/pending', '/teacher/onboarding']
     if (gatedRoutes.includes(pathname)) {
       return NextResponse.redirect(new URL('/teacher/dashboard', request.url))

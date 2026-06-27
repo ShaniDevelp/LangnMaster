@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { BayyanLogo } from '@/components/BayyanLogo'
 import { signOut } from '@/lib/auth/actions'
 import type { Profile } from '@/lib/supabase/types'
 
@@ -6,7 +7,7 @@ export function TopBar({ profile }: { profile: Profile }) {
   return (
     <header className="sticky top-0 z-40 glass border-b border-gray-100">
       <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-        <Link href="/" className="text-lg font-bold text-[#6c4ff5]">LangMaster</Link>
+        <Link href="/"><BayyanLogo size={28} /></Link>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">

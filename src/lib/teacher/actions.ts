@@ -1,7 +1,13 @@
 'use server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
+import { after } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { sendGroupPublishedEmails, sendAdminGroupResponse } from '@/lib/email/group-notify'
+import {
+  notifyAdminTeacherApplication,
+  notifyAdminCourseRequest,
+} from '@/lib/email/teacher-notify'
 
 // ── Teacher Application ───────────────────────────────────────────────────────
 
@@ -12,7 +18,10 @@ type ApplicationData = {
   teachingBio: string
   availability: string[]
   timezone: string
-  rateExpectation: string
+  rateExpectation?: string
+  yearsExperience?: string
+  preferredLevels: string[]
+  preferredDuration: string
 }
 
 export async function submitApplication(
@@ -35,9 +44,7 @@ export async function submitApplication(
         teaching_bio: data.teachingBio || null,
         availability: data.availability,
         timezone: data.timezone || null,
-        rate_expectation: data.rateExpectation
-          ? parseFloat(data.rateExpectation)
-          : null,
+        rate_expectation: data.rateExpectation ? Number(data.rateExpectation) : null,
         status: 'pending',
         submitted_at: new Date().toISOString(),
         reviewed_at: null,
@@ -47,6 +54,31 @@ export async function submitApplication(
     )
 
   if (error) return { error: error.message }
+
+  // Teaching preferences (levels + session duration) used to live in a second
+  // post-approval onboarding wizard. That flow is gone — the application now
+  // collects them, so persist them on the profile up front. They survive
+  // approval (approveTeacher carries the rest of the application across).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('profiles')
+    .update({
+      preferences: {
+        preferredLevels: data.preferredLevels,
+        preferredDuration: data.preferredDuration,
+      },
+      years_experience: data.yearsExperience ? Number(data.yearsExperience) : null,
+    })
+    .eq('id', user.id)
+
+  // Notify admin of the new application. Fire-and-forget.
+  after(() =>
+    notifyAdminTeacherApplication({
+      teacherId: user.id,
+      teacherEmail: user.email ?? '—',
+      languages: data.languagesTaught.map(l => l.lang),
+    }),
+  )
 
   const cookieStore = await cookies()
   cookieStore.set('x-teacher-app-submitted', 'true', {
@@ -59,104 +91,10 @@ export async function submitApplication(
   redirect('/teacher/pending')
 }
 
-// ── Teacher Onboarding (post-approval wizard) ─────────────────────────────────
-
-type TeacherOnboardingData = {
-  timezone: string
-  availability: string[]
-  languagesTaught: string[]
-  preferences: {
-    preferredLevels: string[]
-    preferredDuration: string
-  }
-}
-
-export async function saveTeacherOnboarding(
-  data: TeacherOnboardingData
-): Promise<{ error: string } | void> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Fetch the rich data from teacher_applications to carry into profiles
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: appData } = await (supabase as any)
-    .from('teacher_applications')
-    .select('languages_taught, certifications, teaching_bio, rate_expectation, intro_video_url')
-    .eq('user_id', user.id)
-    .maybeSingle()
-
-  // Update profile with timezone, availability, and all teacher-specific data
-  const { error: profileErr } = await supabase
-    .from('profiles')
-    .update({
-      timezone: data.timezone,
-      availability: data.availability as unknown as string[],
-      onboarding_completed: true,
-      preferences: data.preferences,
-      languages_taught: data.languagesTaught.map(lang => ({ lang, proficiency: 'native' })),
-      certifications: appData?.certifications ?? [],
-      intro_video_url: appData?.intro_video_url ?? null,
-      bio: appData?.teaching_bio ?? null,
-      rate_per_session: appData?.rate_expectation ?? null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
-    .eq('id', user.id)
-
-  if (profileErr) return { error: profileErr.message }
-
-  // Set cookie so proxy knows onboarding is done without DB hit
-  const cookieStore = await cookies()
-  cookieStore.set('x-teacher-onboarded', 'true', {
-    httpOnly: true,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 60 * 60 * 24 * 365,
-  })
-
-  redirect('/teacher/dashboard')
-}
-
-// ── Admin: Approve / Reject Teacher ──────────────────────────────────────────
-// Called from the API route (admin only — uses service role)
-
-export async function approveTeacher(
-  teacherId: string,
-  approved: boolean,
-  adminNotes?: string
-): Promise<{ error?: string }> {
-  const admin = createAdminClient()
-
-  // Update application status
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: appErr } = await (admin as any)
-    .from('teacher_applications')
-    .update({
-      status: approved ? 'approved' : 'rejected',
-      admin_notes: adminNotes ?? null,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq('user_id', teacherId)
-
-  if (appErr) return { error: appErr.message }
-
-  if (approved) {
-    // Mark onboarding_completed so teacher can pass proxy guard
-    // They still need to go through onboarding wizard on first login
-    const { error: profileErr } = await admin
-      .from('profiles')
-      .update({
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any)
-      .eq('id', teacherId)
-
-    // We don't set onboarding_completed here — teacher must complete the wizard first.
-    // We just need the approved flag to let them through /teacher/application and /teacher/onboarding.
-    void profileErr // not blocking
-  }
-
-  return {}
-}
+// Admin approve/reject lives in the API route at
+// /api/admin/approve-teacher (admin-only, service role) — it owns the status
+// update, profile carry-over, and the result email. Do not re-add a server
+// action here; a duplicate path is what previously dropped the email.
 
 // ── Teacher: respond to a group proposal ─────────────────────────────────────
 
@@ -211,7 +149,25 @@ export async function acceptGroupProposal(groupId: string): Promise<{ error?: st
         payload: { group_id: groupId },
       })
     }
+
+    // Group is now live — email teacher + students. Fire-and-forget.
+    after(() =>
+      sendGroupPublishedEmails({
+        courseId: group.course_id,
+        teacherId: group.teacher_id,
+        studentIds: memberIds,
+      }),
+    )
   }
+
+  // Notify admin of the acceptance so they know nothing more is needed.
+  after(() =>
+    sendAdminGroupResponse({
+      courseId: group.course_id,
+      teacherId: group.teacher_id,
+      status: 'accepted',
+    }),
+  )
 
   return {}
 }
@@ -282,6 +238,18 @@ export async function declineGroupProposal(groupId: string, reason?: string): Pr
     })
   }
 
+  // Email admin so they can reassign — reuse names already fetched above.
+  after(() =>
+    sendAdminGroupResponse({
+      courseId: group.course_id,
+      teacherId: user.id,
+      status: 'declined',
+      reason: reason ?? null,
+      teacherName,
+      courseTitle: courseName,
+    }),
+  )
+
   return {}
 }
 
@@ -302,4 +270,13 @@ export async function requestToTeachCourse(courseId: string): Promise<{ error?: 
     if (error.code === '23505') return { error: 'Request already exists' }
     return { error: error.message }
   }
+
+  // Notify admin of the course teaching request. Fire-and-forget.
+  after(() =>
+    notifyAdminCourseRequest({
+      teacherId: user.id,
+      teacherEmail: user.email ?? '—',
+      courseId,
+    }),
+  )
 }

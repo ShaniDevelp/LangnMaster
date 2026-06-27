@@ -1,9 +1,14 @@
 'use server'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
-import type { Course } from '@/lib/supabase/types'
+import { after } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+// createAdminClient used by the disabled Stripe fulfillment below.
+// Stripe disabled — manual Easypaisa/JazzCash flow for now, verified by admin.
+// Re-enable when integrating a real gateway. See src/lib/payments/manual.ts.
+// import { stripe } from '@/lib/stripe'
+import { sendEnrolledEmail, sendAdminEnrollmentEmail } from '@/lib/email'
+// import type { Course } from '@/lib/supabase/types' // used by disabled Stripe checkout
 
 // ── Enrollment (free / post-payment) ────────────────────────────────────────
 
@@ -36,20 +41,54 @@ export async function enrollWithoutPayment(courseId: string): Promise<{ error: s
 
   if (existing) redirect('/student/dashboard')
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await supabase.from('enrollments').insert({
     user_id: user.id,
     course_id: courseId,
     status: 'pending',
     payment_status: 'unpaid',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any)
 
   if (error) return { error: error.message }
+
+  // Fire-and-forget enrollment email — never blocks enroll or breaks on failure.
+  after(async () => {
+    const { data: course } = await supabase
+      .from('courses').select('name, level').eq('id', courseId).single()
+    const { data: profile } = await supabase
+      .from('profiles').select('name').eq('id', user.id).single()
+
+    const to = user.email
+    const c = course as { name: string; level: string } | null
+    const courseTitle = c?.name
+    if (!courseTitle) return
+    const studentName = (profile as { name: string } | null)?.name ?? ''
+
+    // Student confirmation
+    if (to) {
+      const res = await sendEnrolledEmail({ to, name: studentName, courseTitle })
+      if (res.error) console.error('[email] enrolled failed:', res.error)
+    }
+
+    // Admin notification
+    const adminRes = await sendAdminEnrollmentEmail({
+      studentName,
+      studentEmail: to ?? '—',
+      courseTitle,
+      courseLevel: c?.level ?? '—',
+    })
+    if (adminRes.error) console.error('[email] admin enrollment failed:', adminRes.error)
+  })
+
   redirect('/student/dashboard?enrolled=1')
 }
 
-// ── Stripe Checkout ──────────────────────────────────────────────────────────
-
+// ── Stripe Checkout (DISABLED) ────────────────────────────────────────────────
+// Payments are handled manually for now: students pay via Easypaisa/JazzCash and
+// an admin verifies the payment (setEnrollmentPaymentStatus in admin/actions.ts),
+// which flips payment_status to 'paid' — the same effect this used to have.
+// Kept commented for when a real gateway is integrated.
+/*
 export async function createCheckoutSession(courseId: string): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -63,7 +102,7 @@ export async function createCheckoutSession(courseId: string): Promise<void> {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   // Free course — skip Stripe, enroll directly
-  if (Number(course.price_usd) === 0) {
+  if (Number(course.price_pkr) === 0) {
     await supabase.from('enrollments').insert({
       user_id: user.id,
       course_id: courseId,
@@ -80,12 +119,12 @@ export async function createCheckoutSession(courseId: string): Promise<void> {
     line_items: [
       {
         price_data: {
-          currency: 'usd',
+          currency: 'pkr',
           product_data: {
             name: course.name,
             description: `${course.duration_weeks}-week live course · ${course.sessions_per_week} sessions/week · group of ${course.max_group_size}`,
           },
-          unit_amount: Math.round(Number(course.price_usd) * 100),
+          unit_amount: Math.round(Number(course.price_pkr) * 100),
         },
         quantity: 1,
       },
@@ -98,6 +137,7 @@ export async function createCheckoutSession(courseId: string): Promise<void> {
 
   redirect(session.url!)
 }
+*/
 
 // ── Onboarding ───────────────────────────────────────────────────────────────
 
@@ -204,8 +244,10 @@ export async function rateSession(
   return {}
 }
 
-// ── Webhook fulfillment (called from route handler, not client) ───────────────
-
+// ── Webhook fulfillment (DISABLED — Stripe) ───────────────────────────────────
+// Replaced by manual admin verification (setEnrollmentPaymentStatus). Kept for
+// when a real gateway is wired back up.
+/*
 export async function fulfillCheckoutSession(stripeSessionId: string): Promise<void> {
   const session = await stripe.checkout.sessions.retrieve(stripeSessionId)
   if (session.payment_status !== 'paid') return
@@ -242,3 +284,4 @@ export async function fulfillCheckoutSession(stripeSessionId: string): Promise<v
     } as any)
   }
 }
+*/

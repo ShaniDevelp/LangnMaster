@@ -1,20 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { redirect, notFound } from 'next/navigation'
+import { courseLang } from '@/components/CourseBanner'
 import type { Course, Enrollment, CourseModule, Review, Profile } from '@/lib/supabase/types'
 
 // ── Static config ─────────────────────────────────────────────────────────────
-
-const LANG_CONFIG: Record<string, { emoji: string; gradient: string }> = {
-  English: { emoji: '🇬🇧', gradient: 'from-blue-500 to-indigo-600' },
-  Spanish: { emoji: '🇪🇸', gradient: 'from-red-500 to-orange-500' },
-  French: { emoji: '🇫🇷', gradient: 'from-blue-600 to-blue-800' },
-  German: { emoji: '🇩🇪', gradient: 'from-yellow-500 to-amber-600' },
-  Mandarin: { emoji: '🇨🇳', gradient: 'from-red-600 to-red-800' },
-  Japanese: { emoji: '🇯🇵', gradient: 'from-pink-400 to-rose-600' },
-  Korean: { emoji: '🇰🇷', gradient: 'from-blue-400 to-indigo-500' },
-  Arabic: { emoji: '🇸🇦', gradient: 'from-green-600 to-emerald-700' },
-}
 
 const LEVEL_ORDER = ['beginner', 'intermediate', 'advanced']
 
@@ -23,7 +13,7 @@ const FAQ = [
   { q: 'Can I change my group?', a: 'Group changes are possible if you contact support within the first 2 weeks. After that, groups are kept stable for consistency.' },
   { q: 'What if I want a refund?', a: 'Full refund within 7 days of enrollment if you have attended fewer than 2 sessions. After that, pro-rated course credit is issued.' },
   { q: 'How are session times decided?', a: 'Your teacher proposes times based on your group\'s shared availability. You confirm before the first session.' },
-  { q: 'Will I have the same teacher all course?', a: 'Yes. One teacher, same group, whole course. Consistency is core to how LangMaster works.' },
+  { q: 'Will I have the same teacher all course?', a: 'Yes. One teacher, same group, whole course. Consistency is core to how Bayyan works.' },
 ]
 
 const AVATAR_GRADIENTS = [
@@ -124,14 +114,12 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   const teachers = (teachersRaw ?? []) as unknown as CourseTeacherRow[]
   const reviews = (reviewsRaw ?? []) as unknown as ReviewRow[]
 
-  const cfg = LANG_CONFIG[course.language] ?? { emoji: '🌍', gradient: 'from-gray-400 to-gray-600' }
+  const cfg = courseLang(course.language)
   const cohortDate = nextCohortDate()
   const dist = ratingDistribution(reviews)
   const avg = avgRating(reviews)
   const canEnroll = true // enrollment open to all levels; payment deferred until group assignment
-  const outcomes: string[] = course.outcomes?.length
-    ? course.outcomes
-    : defaultOutcomes(course.language, course.level)
+  const outcomes: string[] = course.outcomes ?? []
 
   return (
     <div className="space-y-0">
@@ -143,10 +131,18 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
       </div>
 
       {/* ── Hero ─────────────────────────────────────────────── */}
-      <div className={`bg-gradient-to-br ${cfg.gradient} text-white rounded-3xl p-6 sm:p-8 mb-6`}>
+      <div className={`relative overflow-hidden bg-gradient-to-br ${cfg.gradient} text-white rounded-3xl p-6 sm:p-8 mb-6`}>
+        {course.thumbnail_url && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={course.thumbnail_url} alt={course.name} className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/55" />
+          </>
+        )}
+        <div className="relative">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <div className="text-5xl mb-4">{cfg.emoji}</div>
+            {!course.thumbnail_url && <div className="text-5xl mb-4">{cfg.emoji}</div>}
             <h1 className="text-2xl sm:text-3xl font-bold mb-2">{course.name}</h1>
             <div className="flex flex-wrap items-center gap-2 mb-4">
               <span className="text-sm text-white/80">{course.language}</span>
@@ -178,6 +174,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
             </div>
           ))}
         </div>
+        </div>
       </div>
 
       {/* ── 2-col layout ─────────────────────────────────────── */}
@@ -187,16 +184,18 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         <div className="space-y-6">
 
           {/* What you'll learn */}
-          <Section title="What you'll learn">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {outcomes.map((o, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="mt-0.5 w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs flex-shrink-0">✓</span>
-                  <p className="text-sm text-gray-700">{o}</p>
-                </div>
-              ))}
-            </div>
-          </Section>
+          {outcomes.length > 0 && (
+            <Section title="What you'll learn">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {outcomes.map((o, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span className="mt-0.5 w-5 h-5 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs flex-shrink-0">✓</span>
+                    <p className="text-sm text-gray-700">{o}</p>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {/* Curriculum */}
           {modules.length > 0 && (
@@ -241,7 +240,7 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
               </div>
             ) : (
               <div className="bg-purple-50 rounded-2xl p-5 text-center text-sm text-purple-700">
-                Teacher pool for this course will be published soon. All LangMaster teachers are vetted native or certified speakers.
+                Teacher pool for this course will be published soon. All Bayyan teachers are vetted native or certified speakers.
               </div>
             )}
           </Section>
@@ -361,13 +360,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         <div className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass border-t border-gray-100 px-4 py-3 pb-safe flex items-center gap-4">
           <div>
             <p className="text-xs text-gray-400">Per course</p>
-            <p className="text-xl font-bold text-gray-900">${course.price_usd}</p>
+            <p className="text-xl font-bold text-gray-900">Rs {Number(course.price_pkr).toLocaleString()}</p>
           </div>
           <Link
             href={`/student/courses/${course.id}/checkout`}
             className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl hover:bg-brand-600 transition-colors text-center text-sm"
           >
-            Enroll — ${course.price_usd}
+            Enroll — Rs {Number(course.price_pkr).toLocaleString()}
           </Link>
         </div>
       )}
@@ -391,9 +390,14 @@ function TeacherCard({ teacher, gradient }: { teacher: CourseTeacherRow; gradien
   return (
     <div className="border border-gray-100 rounded-2xl p-4 flex flex-col gap-3 hover:border-brand-200 transition-colors">
       <div className="flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
-          {p?.name?.charAt(0)?.toUpperCase() ?? '?'}
-        </div>
+        {p?.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={p.avatar_url} alt={p.name} className="w-12 h-12 rounded-full object-cover flex-shrink-0" />
+        ) : (
+          <div className={`w-12 h-12 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-bold text-lg flex-shrink-0`}>
+            {p?.name?.charAt(0)?.toUpperCase() ?? '?'}
+          </div>
+        )}
         <div>
           <p className="font-bold text-gray-900 text-sm">{p?.name ?? 'Teacher'}</p>
           {p && (
@@ -456,7 +460,7 @@ function EnrollBlock({
   return (
     <div className="bg-white border border-gray-100 shadow-sm rounded-3xl p-6 space-y-5">
       <div>
-        <p className="text-3xl font-extrabold text-gray-900">${course.price_usd}</p>
+        <p className="text-3xl font-extrabold text-gray-900">Rs {Number(course.price_pkr).toLocaleString()}</p>
         <p className="text-sm text-gray-400">one-time · per course</p>
       </div>
 
@@ -478,7 +482,7 @@ function EnrollBlock({
         href={`/student/courses/${course.id}/checkout`}
         className="block w-full text-center bg-brand-500 text-white font-bold py-4 rounded-2xl text-base hover:bg-brand-600 transition-colors shadow-lg shadow-purple-200"
       >
-        Enroll — ${course.price_usd}
+        Enroll — Rs {Number(course.price_pkr).toLocaleString()}
       </Link>
 
       <p className="text-xs text-center text-gray-500">
@@ -488,31 +492,3 @@ function EnrollBlock({
   )
 }
 
-// ── Default outcomes per level ────────────────────────────────────────────────
-
-function defaultOutcomes(language: string, level: string): string[] {
-  if (level === 'beginner') return [
-    `Introduce yourself and hold basic conversations in ${language}`,
-    'Ask and answer simple questions about everyday topics',
-    'Understand common vocabulary for travel and daily life',
-    'Read and write basic sentences with correct grammar',
-    'Develop confidence speaking from day one',
-    'Build a foundation for intermediate study',
-  ]
-  if (level === 'intermediate') return [
-    `Hold fluid conversations in ${language} on a wide range of topics`,
-    'Understand native speakers in real-world settings',
-    'Express opinions, feelings, and abstract ideas clearly',
-    'Master complex grammar structures and idiomatic language',
-    'Read news articles and informal writing with confidence',
-    'Prepare for professional or academic use of the language',
-  ]
-  return [
-    `Achieve near-native fluency in ${language}`,
-    'Discuss nuanced topics including culture, politics, and philosophy',
-    'Understand regional accents and colloquial speech',
-    'Write formal and informal texts with precision',
-    'Correct your own errors and self-edit in real time',
-    'Engage at a professional or academic level',
-  ]
-}

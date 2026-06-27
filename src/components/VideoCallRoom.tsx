@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 
@@ -27,8 +28,22 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ]
 
+function deviceErrorMsg(kind: 'Microphone' | 'Camera', err: unknown): string {
+  const name = err instanceof Error ? err.name : ''
+  const lower = kind.toLowerCase()
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError')
+    return `${kind} access blocked. Allow it in your browser settings, then rejoin.`
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError')
+    return `No ${lower} found. Connect a ${lower} and rejoin.`
+  if (name === 'NotReadableError' || name === 'TrackStartError')
+    return `${kind} is in use by another app. Close it and rejoin.`
+  return `${kind} unavailable. Check your device and rejoin.`
+}
+
 export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseName, isTeacher, onLeave }: Props) {
   const supabase = createClient()
+  const router = useRouter()
+  const [confirmLeave, setConfirmLeave] = useState(false)
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
   const peersRef = useRef<Map<string, Peer>>(new Map())
@@ -40,6 +55,8 @@ export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseNa
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoOff, setIsVideoOff] = useState(false)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error'>('connecting')
+  const [micError, setMicError] = useState<string | null>(null)
+  const [camError, setCamError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const startTimeRef = useRef(Date.now())
   // Refs so toggle handlers inside useEffect closure can read current values
@@ -116,8 +133,36 @@ export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseNa
           console.error('Failed to fetch TURN servers, using fallback STUN', err)
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        // Acquire devices gracefully — like Google Meet, join even if one device
+        // fails, surfacing a per-device error badge instead of blocking entry.
+        let stream: MediaStream | null = null
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        } catch {
+          let audio: MediaStream | null = null
+          let video: MediaStream | null = null
+          try { audio = await navigator.mediaDevices.getUserMedia({ audio: true }) }
+          catch (e) { setMicError(deviceErrorMsg('Microphone', e)) }
+          try { video = await navigator.mediaDevices.getUserMedia({ video: true }) }
+          catch (e) { setCamError(deviceErrorMsg('Camera', e)) }
+          const tracks = [...(audio?.getAudioTracks() ?? []), ...(video?.getVideoTracks() ?? [])]
+          if (tracks.length) stream = new MediaStream(tracks)
+        }
+
+        // Both devices failed — show full error screen
+        if (!stream) { setStatus('error'); return }
         if (!mounted) { stream.getTracks().forEach(t => t.stop()); return }
+
+        // Flag any missing track (keep specific message if already set above)
+        if (!stream.getAudioTracks().length) {
+          setMicError(prev => prev ?? 'Microphone unavailable. Check your device and rejoin.')
+          setIsMuted(true); isMutedRef.current = true
+        }
+        if (!stream.getVideoTracks().length) {
+          setCamError(prev => prev ?? 'Camera unavailable. Check your device and rejoin.')
+          setIsVideoOff(true); isVideoOffRef.current = true
+        }
+
         localStreamRef.current = stream
         if (localVideoRef.current) localVideoRef.current.srcObject = stream
 
@@ -273,13 +318,15 @@ export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseNa
     return `${m}:${sec}`
   }
 
-  function handleLeave() {
+  const returnPath = isTeacher ? '/teacher/dashboard' : '/student/sessions'
+
+  function doLeave() {
     localStreamRef.current?.getTracks().forEach(t => t.stop())
     channelRef.current?.unsubscribe()
-    onLeave?.()
+    if (onLeave) onLeave()
+    else router.push(returnPath)
   }
 
-  const returnPath = isTeacher ? '/teacher/dashboard' : '/student/sessions'
   const totalParticipants = peers.length + 1
 
   // Grid columns: mobile always 1 col (vertical stack), desktop adapts to participant count
@@ -379,49 +426,105 @@ export function VideoCallRoom({ roomToken, sessionId, userId, userName, courseNa
 
       {/* Controls bar — fixed at bottom, never overlaps video */}
       <div className="flex-shrink-0 flex items-center justify-center gap-3 sm:gap-4 px-4 py-3 sm:py-4 border-t border-white/5 bg-[#0f172a]/80 backdrop-blur-sm">
-        <button
+        <ControlButton
           onClick={toggleMute}
-          title={isMuted ? 'Unmute' : 'Mute'}
-          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-            isMuted ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
-        >
-          {isMuted ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
-        </button>
+          error={micError}
+          active={isMuted}
+          label={isMuted ? 'Unmute' : 'Mute'}
+          icon={isMuted || micError ? <MicOffIcon className="w-5 h-5" /> : <MicIcon className="w-5 h-5" />}
+        />
 
-        <button
+        <ControlButton
           onClick={toggleVideo}
-          title={isVideoOff ? 'Turn on camera' : 'Turn off camera'}
-          className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-            isVideoOff ? 'bg-red-500 text-white' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
-        >
-          {isVideoOff ? <VideoOffIcon className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
-        </button>
+          error={camError}
+          active={isVideoOff}
+          label={isVideoOff ? 'Turn on camera' : 'Turn off camera'}
+          icon={isVideoOff || camError ? <VideoOffIcon className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
+        />
 
         <div className="w-px h-8 bg-white/10" />
 
-        {onLeave ? (
-          <button
-            onClick={handleLeave}
-            title="Leave session"
-            className="w-13 h-13 sm:w-14 sm:h-14 w-[52px] h-[52px] rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center active:scale-90 transition-all"
-          >
-            <EndCallIcon className="w-6 h-6" />
-          </button>
-        ) : (
-          <Link
-            href={returnPath}
-            onClick={() => {
-              localStreamRef.current?.getTracks().forEach(t => t.stop())
-              channelRef.current?.unsubscribe()
-            }}
-            title="Leave session"
-            className="w-[52px] h-[52px] rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center active:scale-90 transition-all"
-          >
-            <EndCallIcon className="w-6 h-6" />
-          </Link>
-        )}
+        <button
+          onClick={() => setConfirmLeave(true)}
+          title="Leave session"
+          className="w-[52px] h-[52px] rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center active:scale-90 transition-all"
+        >
+          <EndCallIcon className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Leave confirmation */}
+      {confirmLeave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6 text-center">
+            <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">🚪</div>
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Leave session?</h2>
+            <p className="text-sm text-gray-500 leading-relaxed mb-6">
+              {isTeacher
+                ? 'Are you sure you want to exit? This ends the class for you.'
+                : 'Are you sure you want to exit the session?'}
+            </p>
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={doLeave}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl transition-colors active:scale-95"
+              >
+                Yes, exit
+              </button>
+              <button
+                onClick={() => setConfirmLeave(false)}
+                className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl transition-colors active:scale-95"
+              >
+                Rejoin room
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ControlButton({
+  onClick, error, active, label, icon,
+}: {
+  onClick: () => void
+  error: string | null
+  active: boolean
+  label: string
+  icon: ReactNode
+}) {
+  return (
+    <div className="relative group">
+      <button
+        onClick={onClick}
+        disabled={!!error}
+        aria-label={error ?? label}
+        className={`w-11 h-11 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+          error
+            ? 'bg-red-500/20 text-red-300 cursor-not-allowed'
+            : active
+              ? 'bg-red-500 text-white'
+              : 'bg-white/10 text-white hover:bg-white/20'
+        }`}
+      >
+        {icon}
+      </button>
+
+      {error && (
+        <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-[#0f172a]">
+          !
+        </span>
+      )}
+
+      {/* Tooltip — native label on idle, error description always available on hover */}
+      <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className={`w-max max-w-[220px] text-xs font-medium rounded-lg px-3 py-2 shadow-lg text-center ${
+          error ? 'bg-red-600 text-white' : 'bg-gray-900 text-white'
+        }`}>
+          {error ?? label}
+        </div>
+        <div className={`w-2 h-2 rotate-45 mx-auto -mt-1 ${error ? 'bg-red-600' : 'bg-gray-900'}`} />
       </div>
     </div>
   )

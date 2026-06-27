@@ -12,7 +12,7 @@ type SessionRow = Session & {
   groups: (Group & {
     week_start?: string | null
     courses: Pick<Course, 'name' | 'language' | 'level' | 'sessions_per_week' | 'duration_weeks'> | null
-    group_members?: (Pick<GroupMember, 'user_id'> & { profiles: Pick<Profile, 'id' | 'name'> | null })[]
+    group_members?: (Pick<GroupMember, 'user_id'> & { profiles: Pick<Profile, 'id' | 'name' | 'avatar_url'> | null })[]
   }) | null
 }
 
@@ -345,7 +345,7 @@ function TeacherSessionDetailModal({
   const totalSessions = (session.groups?.courses?.sessions_per_week ?? 1) * (session.groups?.courses?.duration_weeks ?? 1)
 
   const students = (session.groups?.group_members ?? [])
-    .map(m => m.profiles?.name ?? 'Student')
+    .map(m => ({ name: m.profiles?.name ?? 'Student', avatarUrl: m.profiles?.avatar_url ?? null }))
     .filter(Boolean)
 
   return (
@@ -415,12 +415,17 @@ function TeacherSessionDetailModal({
             <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Students ({students.length})</p>
               <div className="flex flex-wrap gap-2">
-                {students.map((name, i) => (
+                {students.map((s, i) => (
                   <div key={i} className="flex items-center gap-1.5 bg-white rounded-lg px-2.5 py-1.5 border border-gray-100">
-                    <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold uppercase">
-                      {name.charAt(0)}
-                    </div>
-                    <span className="text-xs font-semibold text-gray-700">{name}</span>
+                    {s.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.avatarUrl} alt={s.name} className="w-5 h-5 rounded-md object-cover" />
+                    ) : (
+                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold uppercase">
+                        {s.name.charAt(0)}
+                      </div>
+                    )}
+                    <span className="text-xs font-semibold text-gray-700">{s.name}</span>
                   </div>
                 ))}
               </div>

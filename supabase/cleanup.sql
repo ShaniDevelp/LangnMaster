@@ -1,5 +1,5 @@
 -- ============================================================
--- LangMaster — Full Data Cleanup Script
+-- Bayyan — Full Data Cleanup Script
 -- ============================================================
 -- Run this in Supabase SQL Editor to wipe ALL user data.
 -- Tables from schema.sql + all migration files are covered.

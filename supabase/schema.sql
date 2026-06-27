@@ -1,4 +1,4 @@
--- LangMaster Schema
+-- Bayyan Schema
 
 -- Profiles (extends auth.users)
 create table public.profiles (
@@ -21,7 +21,7 @@ create table public.courses (
   duration_weeks int not null,
   sessions_per_week int not null default 3,
   max_group_size int not null default 2,
-  price_usd numeric(10,2) not null default 0,
+  price_pkr numeric(10,2) not null default 0,
   thumbnail_url text,
   is_active boolean default true,
   created_at timestamptz default now()
@@ -150,7 +150,7 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- Sample courses seed
-insert into public.courses (name, description, language, level, duration_weeks, sessions_per_week, price_usd) values
+insert into public.courses (name, description, language, level, duration_weeks, sessions_per_week, price_pkr) values
 ('English for Beginners', 'Build your English foundation with vocabulary, grammar, and conversational skills. Perfect for absolute beginners.', 'English', 'beginner', 12, 3, 149.00),
 ('Business English', 'Master professional English for meetings, emails, and presentations. Accelerate your career.', 'English', 'intermediate', 8, 3, 199.00),
 ('Advanced English Fluency', 'Achieve native-like fluency through intensive conversation practice and advanced grammar.', 'English', 'advanced', 16, 3, 249.00),

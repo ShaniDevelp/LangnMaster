@@ -51,8 +51,8 @@ function buildMessage(type: string, payload: Record<string, unknown>): string {
     case 'student_no_show':      return `A student didn't show up for today's session.`
     case 'session_cancelled':    return `A session has been cancelled by admin.`
     case 'review_received':      return `A student left you a review!`
-    case 'payout_processed':     return `Your payout of $${payload.amount ?? '–'} has been processed.`
-    case 'payout_requested':     return `Payout request of $${payload.amount ?? '–'} submitted. Admin will process it soon.`
+    case 'payout_processed':     return `Your payout of Rs ${payload.amount ?? '–'} has been processed.`
+    case 'payout_requested':     return `Payout request of Rs ${payload.amount ?? '–'} submitted. Admin will process it soon.`
     case 'availability_updated': return `Your availability has been updated (${payload.slots_count ?? 0} slots).`
     case 'availability_conflict': return `Admin scheduled a session outside your availability. Please check your schedule.`
     default: return 'You have a new notification.'

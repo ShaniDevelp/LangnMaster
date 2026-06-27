@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createAdminClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import type { Profile, Enrollment, Group } from '@/lib/supabase/types'
 
@@ -6,6 +6,8 @@ type StatCard = { label: string; value: number | string; icon: string; href: str
 
 export default async function AdminDashboard() {
   const supabase = await createClient()
+  // Service-role client to read teacher_applications past RLS (no admin select policy)
+  const admin = createAdminClient()
 
   const [
     { count: totalStudents },
@@ -16,22 +18,28 @@ export default async function AdminDashboard() {
     { data: enrollmentsWithPrice },
     { data: pendingPayouts },
     { data: pendingGroupActions },
+    { count: pendingApplications },
+    { count: pendingCourseRequests },
   ] = await Promise.all([
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student'),
     supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'teacher'),
     supabase.from('enrollments').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('groups').select('*', { count: 'exact', head: true }).eq('status', 'active'),
     supabase.from('sessions').select('*', { count: 'exact', head: true }),
-    supabase.from('enrollments').select('courses(price_usd)'),
+    supabase.from('enrollments').select('courses(price_pkr)'),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any).from('teacher_payouts').select('id, amount, teacher_id, profiles:teacher_id(name)').eq('status', 'pending'),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (supabase as any).from('group_action_requests').select('id, type, group_id, teacher_id, groups(courses(name)), profiles:teacher_id(name)').eq('status', 'pending')
+    (supabase as any).from('group_action_requests').select('id, type, group_id, teacher_id, groups(courses(name)), profiles:teacher_id(name)').eq('status', 'pending'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (admin as any).from('teacher_applications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any).from('course_teachers').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
   ])
 
   // Financial Stats
-  const rawEnrollments = (enrollmentsWithPrice ?? []) as unknown as { courses: { price_usd: number } | null }[]
-  const totalRevenue = rawEnrollments.reduce((acc, e) => acc + (e.courses?.price_usd ?? 0), 0)
+  const rawEnrollments = (enrollmentsWithPrice ?? []) as unknown as { courses: { price_pkr: number } | null }[]
+  const totalRevenue = rawEnrollments.reduce((acc, e) => acc + (e.courses?.price_pkr ?? 0), 0)
 
   const payouts = (pendingPayouts ?? []) as { id: string; amount: number; profiles?: { name?: string } }[]
   const totalPendingPayoutsAmount = payouts.reduce((acc, p) => acc + p.amount, 0)
@@ -43,14 +51,19 @@ export default async function AdminDashboard() {
   }[]
 
   const stats: StatCard[] = [
-    { label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, icon: '💳', href: '#', color: 'from-emerald-500 to-teal-500' },
+    { label: 'Total Revenue', value: `Rs ${totalRevenue.toLocaleString()}`, icon: '💳', href: '#', color: 'from-emerald-500 to-teal-500' },
     { label: 'Students', value: totalStudents ?? 0, icon: '🎓', href: '/admin/students', color: 'from-blue-500 to-indigo-500' },
     { label: 'Teachers', value: totalTeachers ?? 0, icon: '👨‍🏫', href: '/admin/teachers', color: 'from-cyan-500 to-blue-500' },
     { label: 'Active Groups', value: activeGroups ?? 0, icon: '👥', href: '/admin/groups', color: 'from-purple-500 to-[#6c4ff5]' },
     { label: 'Total Sessions', value: totalSessions ?? 0, icon: '📅', href: '/admin/groups', color: 'from-pink-500 to-rose-500' },
   ]
 
-  const hasAlerts = (pendingEnrollments ?? 0) > 0 || payouts.length > 0 || groupActions.length > 0
+  const hasAlerts =
+    (pendingEnrollments ?? 0) > 0 ||
+    payouts.length > 0 ||
+    groupActions.length > 0 ||
+    (pendingApplications ?? 0) > 0 ||
+    (pendingCourseRequests ?? 0) > 0
 
   return (
     <div className="space-y-8">
@@ -74,6 +87,38 @@ export default async function AdminDashboard() {
             <h2 className="font-bold text-amber-900">Requires Attention</h2>
           </div>
           <div className="divide-y divide-gray-50">
+            {/* New teacher applications */}
+            {(pendingApplications ?? 0) > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-600 text-lg">👨‍🏫</div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{pendingApplications} New Teacher Application{pendingApplications !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500">Teachers are waiting for application review.</p>
+                  </div>
+                </div>
+                <Link href="/admin/teachers" className="text-sm font-semibold text-white bg-[#6c4ff5] px-4 py-2 rounded-xl hover:bg-[#5c3de8] transition-colors shadow-sm whitespace-nowrap">
+                  Review applications
+                </Link>
+              </div>
+            )}
+
+            {/* Teacher course-teach requests */}
+            {(pendingCourseRequests ?? 0) > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg">🎓</div>
+                  <div>
+                    <p className="font-semibold text-gray-900">{pendingCourseRequests} Course Teaching Request{pendingCourseRequests !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500">Teachers have requested to teach a course.</p>
+                  </div>
+                </div>
+                <Link href="/admin/requests" className="text-sm font-semibold text-[#6c4ff5] bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition-colors whitespace-nowrap">
+                  Review requests
+                </Link>
+              </div>
+            )}
+
             {/* Payouts */}
             {payouts.length > 0 && (
               <div className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors">
@@ -81,7 +126,7 @@ export default async function AdminDashboard() {
                   <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 text-lg">💸</div>
                   <div>
                     <p className="font-semibold text-gray-900">{payouts.length} Pending Payout{payouts.length !== 1 ? 's' : ''}</p>
-                    <p className="text-sm text-gray-500">Teachers have requested a total of <span className="font-semibold text-gray-900">${totalPendingPayoutsAmount.toFixed(2)}</span>.</p>
+                    <p className="text-sm text-gray-500">Teachers have requested a total of <span className="font-semibold text-gray-900">Rs {totalPendingPayoutsAmount.toLocaleString()}</span>.</p>
                   </div>
                 </div>
                 <Link href="/admin/payouts" className="text-sm font-semibold text-[#6c4ff5] bg-purple-50 px-4 py-2 rounded-xl hover:bg-purple-100 transition-colors whitespace-nowrap">

@@ -28,17 +28,30 @@ export default async function TeacherDashboard() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profileRaw } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const profile = profileRaw as Profile
+  // All four only depend on the user — fetch together instead of as a
+  // sequential waterfall (saves three cross-region round trips per navigation).
+  const [profileRes, groupsRes, coursesRes, proposalRes] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single(),
+    supabase
+      .from('groups')
+      .select('*, courses(name, language, level, sessions_per_week, duration_weeks), group_members(*, profiles:user_id(id, name, avatar_url))')
+      .eq('teacher_id', user.id)
+      .eq('status', 'active')
+      .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined'),
+    supabase
+      .from('courses')
+      .select('*, course_teachers(teacher_id, status)')
+      .eq('is_active', true)
+      .eq('course_teachers.teacher_id', user.id),
+    supabase
+      .from('groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('teacher_id', user.id)
+      .eq('acceptance_status', 'pending_teacher'),
+  ])
 
-  const { data: groupsRaw } = await supabase
-    .from('groups')
-    .select('*, courses(name, language, level, sessions_per_week, duration_weeks), group_members(*, profiles:user_id(id, name, avatar_url))')
-    .eq('teacher_id', user.id)
-    .eq('status', 'active')
-    .neq('acceptance_status', 'pending_teacher').neq('acceptance_status', 'declined')
-
-  const groups = (groupsRaw ?? []) as unknown as GroupRow[]
+  const profile = profileRes.data as Profile
+  const groups = (groupsRes.data ?? []) as unknown as GroupRow[]
   const groupIds = groups.map(g => g.id)
 
   let upcoming: SessionRow[] = []
@@ -105,13 +118,8 @@ export default async function TeacherDashboard() {
   const todayCount = upcoming.filter(s => isToday(s.scheduled_at)).length
   const nextSession = upcoming[0]
 
-  // Fetch available courses and the teacher's current request status
-  const { data: coursesRaw } = await supabase
-    .from('courses')
-    .select('*, course_teachers(teacher_id, status)')
-    .eq('is_active', true)
-    .eq('course_teachers.teacher_id', user.id)
-
+  // Available courses + the teacher's request status (fetched in the batch above)
+  const coursesRaw = coursesRes.data
   const availableCourses = (coursesRaw ?? []).map(c => ({
     id: c.id,
     name: c.name,
@@ -119,8 +127,46 @@ export default async function TeacherDashboard() {
     level: c.level,
     sessions_per_week: c.sessions_per_week,
     duration_weeks: c.duration_weeks,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     status: (c.course_teachers as any)?.[0]?.status ?? 'none'
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   })) as any[]
+
+  // ── Onboarding journey state ──────────────────────────────────────────────
+  // Until a teacher has an active group, show a step-by-step "getting started"
+  // guide instead of the (empty) live dashboard. (proposal count fetched above)
+  const proposalCountRaw = proposalRes.count
+
+  const courseRequests = availableCourses.filter(c => c.status !== 'none')
+  const hasRequestedCourse = courseRequests.length > 0
+  const hasApprovedCourse = courseRequests.some(c => c.status === 'approved')
+  const hasGroupProposal = (proposalCountRaw ?? 0) > 0
+  const hasActiveGroup = groups.length > 0
+
+  if (!hasActiveGroup) {
+    return (
+      <div className="space-y-8">
+        {/* Header */}
+        <div>
+          <p className="text-sm text-gray-400">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+          <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mt-1">
+            Welcome, {profile?.name?.split(' ')[0]} 👋
+          </h1>
+        </div>
+
+        <GettingStartedJourney
+          hasRequestedCourse={hasRequestedCourse}
+          hasApprovedCourse={hasApprovedCourse}
+          hasGroupProposal={hasGroupProposal}
+        />
+
+        {/* Course requests (so they can act on / track step 2) */}
+        <MyCoursesClient courses={courseRequests} currentUserId={user.id} />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -280,10 +326,16 @@ export default async function TeacherDashboard() {
                     </div>
                     <div className="flex -space-x-2 flex-shrink-0">
                       {g.group_members.slice(0, 2).map(m => (
-                        <div key={m.id}
-                          className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold">
-                          {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                        </div>
+                        m.profiles?.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img key={m.id} src={m.profiles.avatar_url} alt={m.profiles.name}
+                            className="w-7 h-7 rounded-full object-cover border-2 border-white" />
+                        ) : (
+                          <div key={m.id}
+                            className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold">
+                            {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
+                          </div>
+                        )
                       ))}
                     </div>
                   </div>
@@ -318,6 +370,127 @@ export default async function TeacherDashboard() {
 
       {/* ── My Course Requests (refactored to client component) ── */}
       <MyCoursesClient courses={availableCourses.filter(c => c.status !== 'none')} currentUserId={user.id} />
+    </div>
+  )
+}
+
+function GettingStartedJourney({
+  hasRequestedCourse,
+  hasApprovedCourse,
+  hasGroupProposal,
+}: {
+  hasRequestedCourse: boolean
+  hasApprovedCourse: boolean
+  hasGroupProposal: boolean
+}) {
+  type Step = { title: string; desc: string; done: boolean; cta: { label: string; href: string } | null }
+
+  const steps: Step[] = [
+    {
+      title: 'Application approved',
+      desc: 'Welcome aboard — your teaching application has been accepted.',
+      done: true,
+      cta: null,
+    },
+    {
+      title: 'Choose a course to teach',
+      desc: 'Browse the catalog and request the course you want to teach.',
+      done: hasRequestedCourse,
+      cta: hasRequestedCourse ? null : { label: 'Browse courses', href: '/teacher/courses' },
+    },
+    {
+      title: 'Get approved for the course',
+      desc: 'An admin reviews your request and approves you to teach it.',
+      done: hasApprovedCourse,
+      cta: null,
+    },
+    {
+      title: 'Get matched with a group',
+      desc: 'As students enroll in your course, the admin forms a group and sends it your way.',
+      done: hasGroupProposal,
+      cta: null,
+    },
+    {
+      title: 'Accept your group',
+      desc: 'Review the proposed group and accept it to lock it in.',
+      done: false,
+      cta: hasGroupProposal ? { label: 'Review proposal', href: '/teacher/proposals' } : null,
+    },
+    {
+      title: 'Start teaching & earning',
+      desc: 'Run your sessions, help students learn, and earn for every class.',
+      done: false,
+      cta: null,
+    },
+  ]
+
+  const activeIndex = steps.findIndex(s => !s.done)
+  const completed = steps.filter(s => s.done).length
+  const progress = Math.round((completed / steps.length) * 100)
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* Progress header */}
+      <div className="p-6 sm:p-8 bg-gradient-to-br from-[#6c4ff5] to-indigo-600 text-white">
+        <h2 className="text-xl font-bold">Let&apos;s get you teaching 🚀</h2>
+        <p className="text-white/70 text-sm mt-1">
+          Complete these steps to start running classes and earning.
+        </p>
+        <div className="mt-5">
+          <div className="flex items-center justify-between text-xs font-semibold mb-1.5">
+            <span>{completed} of {steps.length} done</span>
+            <span>{progress}%</span>
+          </div>
+          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-2 bg-white rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Steps */}
+      <ol className="p-4 sm:p-6 space-y-1">
+        {steps.map((s, i) => {
+          const active = i === activeIndex
+          return (
+            <li
+              key={s.title}
+              className={`flex items-start gap-4 p-3 rounded-2xl transition-colors ${active ? 'bg-purple-50/60' : ''}`}
+            >
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
+                s.done ? 'bg-emerald-100 text-emerald-600'
+                  : active ? 'bg-[#6c4ff5] text-white'
+                  : 'bg-gray-100 text-gray-400'
+              }`}>
+                {s.done ? '✓' : i + 1}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={`text-sm font-semibold ${active ? 'text-[#6c4ff5]' : s.done ? 'text-gray-700' : 'text-gray-400'}`}>
+                    {s.title}
+                  </p>
+                  {active && (
+                    <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">Current</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-400 mt-0.5">{s.desc}</p>
+                {active && s.cta && (
+                  <Link
+                    href={s.cta.href}
+                    className="inline-flex items-center gap-1 mt-3 text-sm font-semibold text-white bg-[#6c4ff5] px-4 py-2 rounded-xl hover:bg-[#5c3de8] transition-colors shadow-sm"
+                  >
+                    {s.cta.label} →
+                  </Link>
+                )}
+                {active && !s.cta && !s.done && (
+                  <p className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Waiting on admin…
+                  </p>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
     </div>
   )
 }

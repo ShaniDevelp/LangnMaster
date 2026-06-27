@@ -1,6 +1,9 @@
 'use server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
+import { sendPaymentVerifiedEmails } from '@/lib/email/group-notify'
+import { notifyTeacherCourseRequestResult } from '@/lib/email/teacher-notify'
 
 // ── Smart group assignment suggestions ────────────────────────────────────────
 // Replaces the old round-robin assignGroups() which ignored both course_teachers
@@ -408,6 +411,44 @@ export async function resolveTeacherCourseRequest(requestId: string, status: 'ap
     .eq('id', requestId)
 
   if (error) return { error: error.message }
-  
+
+  // Email the teacher with the approve/reject result. Fire-and-forget.
+  after(() =>
+    notifyTeacherCourseRequestResult({
+      requestId,
+      approved: status === 'approved',
+    }),
+  )
+
   revalidatePath('/admin/requests')
+}
+
+// ── Manual payment verification ───────────────────────────────────────────────
+// While the real gateway is not yet integrated, students pay via Easypaisa/JazzCash
+// and send a screenshot on WhatsApp. The admin flips the enrollment to paid here.
+// This mirrors what the Stripe webhook (fulfillCheckoutSession) used to do.
+export async function setEnrollmentPaymentStatus(
+  enrollmentId: string,
+  paymentStatus: 'paid' | 'unpaid'
+): Promise<{ error?: string } | void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if ((profile as { role: string } | null)?.role !== 'admin') return { error: 'Unauthorized' }
+
+  const admin = createAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (admin.from('enrollments').update({ payment_status: paymentStatus } as any)).eq('id', enrollmentId)
+
+  if (error) return { error: error.message }
+
+  // On verification, notify student + teacher (each with role-specific content).
+  // Fire-and-forget so the admin response isn't blocked by email latency.
+  if (paymentStatus === 'paid') {
+    after(() => sendPaymentVerifiedEmails(enrollmentId))
+  }
+
+  revalidatePath('/admin/enrollments')
 }

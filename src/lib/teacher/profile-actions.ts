@@ -10,7 +10,6 @@ export async function saveTeacherProfile(data: {
   yearsExp: number
   certs: string[]
   languages: { lang: string; proficiency: string }[]
-  rate: number
 }): Promise<{ error?: string }> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -27,7 +26,6 @@ export async function saveTeacherProfile(data: {
       years_experience: data.yearsExp,
       certifications: data.certs,
       languages_taught: data.languages,
-      rate_per_session: data.rate,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any)
     .eq('id', user.id)

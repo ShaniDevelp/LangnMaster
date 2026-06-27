@@ -42,7 +42,7 @@ export function PendingPageClient({
           setApp(updated)
           if (updated.status === 'approved') {
             setRedirecting(true)
-            window.location.href = `/api/auth/set-teacher-state?next=/teacher/onboarding`
+            window.location.href = `/api/auth/set-teacher-state?next=/teacher/dashboard`
           }
         }
       )
@@ -61,7 +61,7 @@ export function PendingPageClient({
             🎉
           </div>
           <h1 className="text-2xl font-bold text-gray-900">You&apos;re approved!</h1>
-          <p className="text-gray-500">Redirecting to onboarding…</p>
+          <p className="text-gray-500">Redirecting to your dashboard…</p>
         </div>
       </div>
     )
@@ -91,7 +91,7 @@ export function PendingPageClient({
             <p className="text-gray-500 text-base leading-relaxed mb-8 max-w-md">
               {status === 'rejected' && "Unfortunately your application wasn't approved at this time. You can reapply with updated information."}
               {status === 'pending'  && `Submitted ${formatDate(app.submitted_at)}. Our team reviews every application within 48 hours — we'll email you with our decision.`}
-              {status === 'approved' && 'Your application has been approved. Complete your onboarding wizard to start teaching.'}
+              {status === 'approved' && 'Your application has been approved. Head to your dashboard to start teaching.'}
             </p>
 
             {status === 'rejected' && app.admin_notes && (
@@ -109,9 +109,9 @@ export function PendingPageClient({
                 </Link>
               )}
               {status === 'approved' && (
-                <Link href="/teacher/onboarding"
+                <Link href="/teacher/dashboard"
                   className="inline-flex items-center justify-center px-8 py-4 rounded-2xl bg-[#6c4ff5] text-white font-bold text-base hover:bg-[#5c3de8] transition-colors shadow-lg shadow-purple-200">
-                  Complete onboarding →
+                  Go to dashboard →
                 </Link>
               )}
               <a href="mailto:teachers@langmaster.com"
@@ -183,16 +183,10 @@ export function PendingPageClient({
                     active: status === 'pending',
                   },
                   {
-                    step: '3', title: 'Onboarding wizard',
-                    desc: 'Set your schedule, preferences & test your device.',
-                    done: false,
-                    active: status === 'approved',
-                  },
-                  {
-                    step: '4', title: 'Start teaching',
+                    step: '3', title: 'Start teaching',
                     desc: 'Admin assigns your first group. Session starts Monday.',
                     done: false,
-                    active: false,
+                    active: status === 'approved',
                   },
                 ].map(item => (
                   <li key={item.step} className="flex items-start gap-4">

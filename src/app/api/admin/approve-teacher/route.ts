@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { notifyTeacherApplicationResult } from '@/lib/email/teacher-notify'
 
 export async function POST(req: NextRequest) {
   // Verify the caller is an admin via their session
@@ -67,6 +68,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: appErr.message }, { status: 500 })
     }
   }
+
+  const approved = action === 'approve'
+
+  // On approval, carry the application data onto the public profile and mark
+  // onboarding_completed = true — teacher lands straight on their dashboard,
+  // no separate post-approval wizard.
+  if (approved) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: app } = await (admin as any)
+      .from('teacher_applications')
+      .select('languages_taught, certifications, teaching_bio, intro_video_url, timezone, availability')
+      .eq('user_id', teacherId)
+      .maybeSingle()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (admin as any)
+      .from('profiles')
+      .update({
+        onboarding_completed: true,
+        timezone: app?.timezone ?? null,
+        availability: app?.availability ?? [],
+        languages_taught: app?.languages_taught ?? [],
+        certifications: app?.certifications ?? [],
+        intro_video_url: app?.intro_video_url ?? null,
+        bio: app?.teaching_bio ?? null,
+      })
+      .eq('id', teacherId)
+  }
+
+  // Email the teacher with the approve/reject result. Awaited so it actually
+  // sends before the response (the notify fn is self-contained + non-throwing).
+  await notifyTeacherApplicationResult({ teacherId, approved, adminNotes })
 
   return NextResponse.json({ ok: true })
 }

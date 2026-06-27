@@ -10,7 +10,7 @@ type GroupItem = {
   week_start: string
   status: 'active' | 'completed'
   courses: { name: string; language: string; level: string; sessions_per_week: number; duration_weeks: number } | null
-  group_members: { id: string; profiles: { id: string; name: string } | null }[]
+  group_members: { id: string; profiles: { id: string; name: string; avatar_url: string | null } | null }[]
   next_session: SessionSlim | null
   done_count: number
 }
@@ -154,10 +154,16 @@ export function GroupsClient({ groups }: { groups: GroupItem[] }) {
                 ) : (
                   <div className="flex -space-x-2">
                     {group.group_members.map(m => (
-                      <div key={m.id} title={m.profiles?.name ?? ''}
-                        className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold">
-                        {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
-                      </div>
+                      m.profiles?.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img key={m.id} src={m.profiles.avatar_url} alt={m.profiles.name} title={m.profiles?.name ?? ''}
+                          className="w-8 h-8 rounded-full object-cover border-2 border-white" />
+                      ) : (
+                        <div key={m.id} title={m.profiles?.name ?? ''}
+                          className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-indigo-500 border-2 border-white flex items-center justify-center text-white text-xs font-bold">
+                          {m.profiles?.name?.charAt(0).toUpperCase() ?? '?'}
+                        </div>
+                      )
                     ))}
                     <span className="ml-3 text-sm text-gray-500 self-center">{group.group_members.length} student{group.group_members.length !== 1 ? 's' : ''}</span>
                   </div>

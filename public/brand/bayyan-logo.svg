@@ -1,0 +1,19 @@
+<svg width="248" height="64" viewBox="0 0 248 64" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Bayyan">
+  <defs>
+    <linearGradient id="bayyanGradH" x1="6" y1="4" x2="58" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C63F7"/>
+      <stop offset="1" stop-color="#4D2EC9"/>
+    </linearGradient>
+  </defs>
+  <!-- mark -->
+  <rect x="2" y="2" width="60" height="60" rx="18" fill="url(#bayyanGradH)"/>
+  <g fill="#FFFFFF">
+    <rect x="16" y="24" width="6" height="16" rx="3"/>
+    <rect x="25" y="18" width="6" height="28" rx="3"/>
+    <rect x="34" y="22" width="6" height="20" rx="3"/>
+    <rect x="43" y="17" width="6" height="30" rx="3"/>
+  </g>
+  <circle cx="46" cy="51" r="2.5" fill="#FFFFFF" fill-opacity="0.9"/>
+  <!-- wordmark (convert to outlines before final use) -->
+  <text x="80" y="42" font-family="'Poppins','Segoe UI',Arial,sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#312181">Bayyan</text>
+</svg>

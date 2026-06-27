@@ -112,7 +112,7 @@ export default async function TeacherCourseDetailPage({ params }: { params: Prom
           <div className="bg-white border border-gray-100 shadow-sm rounded-3xl p-6 sticky top-8">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Teaching Interest</h3>
             <p className="text-sm text-gray-500 mb-6">
-              LangMaster courses are taught by native-level instructors. By applying, you agree to follow the standard curriculum and assessment guidelines.
+              Bayyan courses are taught by native-level instructors. By applying, you agree to follow the standard curriculum and assessment guidelines.
             </p>
             
             <TeacherRequestButton courseId={course.id} initialStatus={currentStatus} />

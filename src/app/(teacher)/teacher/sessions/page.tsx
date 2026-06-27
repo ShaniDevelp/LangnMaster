@@ -24,7 +24,7 @@ export default async function TeacherSessionsPage() {
           *,
           week_start,
           courses (name, language, level, sessions_per_week, duration_weeks),
-          group_members (user_id, profiles:user_id (id, name))
+          group_members (user_id, profiles:user_id (id, name, avatar_url))
         )
       `)
       .in('group_id', groupIds)
